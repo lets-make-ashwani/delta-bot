@@ -27,7 +27,7 @@ class Config:
     
     # Groq LPU Quantitative AI Brain Configuration (Ultra-fast LLM inference)
     GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
-    GROQ_MODEL: str = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    GROQ_MODEL: str = os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b")
     
     # Endpoints
     DEMO_WEB_URL: str = "https://demo.delta.exchange"
@@ -59,8 +59,8 @@ class Config:
     STOP_LOSS_PCT: float = 0.25   # 0.25% hard stop
     TAKE_PROFIT_PCT: float = 0.55  # 0.55% target profit (+55% return on margin at 100x)
     
-    # Volatility and Spread filters
-    MAX_ALLOWABLE_SPREAD_PCT: float = 0.06
+    # Volatility and Spread filters (Testnet/Demo books have wider spreads than live)
+    MAX_ALLOWABLE_SPREAD_PCT: float = float(os.getenv("MAX_ALLOWABLE_SPREAD_PCT", "2.5" if MODE in ["demo", "paper", "testnet"] else "0.15"))
     
     # Polling frequency in seconds
     POLL_INTERVAL_SEC: float = 2.0

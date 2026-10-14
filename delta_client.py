@@ -17,9 +17,10 @@ logger = logging.getLogger("DeltaClient")
 
 class PaperTradingEngine:
     """Simulates 100x leverage margin trading using live order book and tick data."""
-    def __init__(self, initial_capital_inr: float = 100.0, leverage: int = 100, usd_inr_rate: float = 86.5):
-        self.initial_capital_inr = initial_capital_inr
-        self.balance_inr = initial_capital_inr
+    def __init__(self, initial_capital_inr: float = 0.0, leverage: int = 100, usd_inr_rate: float = 86.5):
+        cap = initial_capital_inr if initial_capital_inr > 0 else 50000.0
+        self.initial_capital_inr = cap
+        self.balance_inr = cap
         self.leverage = leverage
         self.usd_inr_rate = usd_inr_rate
         self.position: Optional[Dict[str, Any]] = None
@@ -93,7 +94,8 @@ class PaperTradingEngine:
             price_change_pct = (entry - current_price) / entry
 
         pnl_inr = notional_inr * price_change_pct
-        self.position["unrealized_pnl_inr"] = pnl_inr
+        self.position["unrealized_pnl_inr"] = round(pnl_inr, 2)
+        self.position["return_on_equity_pct"] = round((pnl_inr / max(1.0, self.position["margin_inr"])) * 100, 2)
 
         # 1. Check Liquidation
         if (side == "BUY" and current_price <= liq) or (side == "SELL" and current_price >= liq):
@@ -491,7 +493,8 @@ class DeltaExchangeManager:
             "wins": len(wins),
             "losses": len(losses),
             "win_rate_pct": win_rate,
-            "total_pnl_inr": round(total_pnl_inr, 2)
+            "total_pnl_inr": round(total_pnl_inr, 2),
+            "total_realized_pnl_inr": round(total_pnl_inr, 2)
         }
 
     def place_scalp_order(self, side: str, contracts: int, entry_price: float, sl_price: float, tp_price: float) -> Dict[str, Any]:

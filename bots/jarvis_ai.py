@@ -44,28 +44,42 @@ class JarvisAIBot(BaseBot):
                 f"Orderbook Depth Imbalance: {imbalance:+.2f} | News Catalyst: {news_label} (Score: {news_score:+.2f})\n"
                 f"Deliver your executive quantitative verdict now."
             )
-            payload = {
-                "model": config.GROQ_MODEL,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                "temperature": 0.2,
-                "max_tokens": 120,
-                "response_format": {"type": "json_object"}
-            }
+            candidate_models = [config.GROQ_MODEL, "qwen/qwen3.8-27b", "openai/gpt-oss-120b"]
+            # Remove duplicates preserving order
+            models_to_try = []
+            for m in candidate_models:
+                if m and m not in models_to_try:
+                    models_to_try.append(m)
 
-            resp = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=3.5)
-            if resp.status_code == 200:
-                data = resp.json()
-                content = data["choices"][0]["message"]["content"]
-                parsed = json.loads(content)
-                self.groq_cache = parsed
-                self.last_groq_time = now
-                logger.info(f"⚡ [GROQ LPU REASONING] {parsed.get('verdict')} ({parsed.get('quant_score'):+d}/100): {parsed.get('summary')}")
-                return parsed
-            else:
-                logger.debug(f"Groq API returned HTTP {resp.status_code}: {resp.text}")
+            for model_name in models_to_try:
+                try:
+                    payload = {
+                        "model": model_name,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt}
+                        ],
+                        "temperature": 0.2,
+                        "max_tokens": 150,
+                        "response_format": {"type": "json_object"}
+                    }
+                    resp = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=3.5)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        content = data["choices"][0]["message"]["content"]
+                        parsed = json.loads(content)
+                        self.groq_cache = parsed
+                        self.last_groq_time = now
+                        self.last_model_used = model_name
+                        logger.info(f"⚡ [GROQ LPU ({model_name})] {parsed.get('verdict')} ({parsed.get('quant_score'):+d}/100): {parsed.get('summary')}")
+                        return parsed
+                    elif resp.status_code == 404:
+                        continue  # Try next model candidate
+                    else:
+                        logger.warning(f"Groq API ({model_name}) returned HTTP {resp.status_code}: {resp.text}")
+                except Exception as inner_err:
+                    logger.debug(f"Groq query attempt ({model_name}) error: {inner_err}")
+                    continue
         except Exception as e:
             logger.debug(f"Groq LPU query notice: {e}")
         return None
@@ -171,7 +185,8 @@ class JarvisAIBot(BaseBot):
         )
 
         if groq_res:
-            powered_by = f"Groq LPU ({config.GROQ_MODEL})"
+            active_model = getattr(self, "last_model_used", config.GROQ_MODEL)
+            powered_by = f"Groq LPU ({active_model})"
             g_verdict = groq_res.get("verdict", verdict)
             if "BUY" in g_verdict:
                 action = "BUY"
