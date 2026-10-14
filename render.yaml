@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: delta-scalper-bot
+    env: python
+    plan: free
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 4 web_server:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: BOT_MODE
+        value: demo
+      - key: DELTA_API_URL
+        value: https://cdn-ind.testnet.deltaex.org
+      - key: SYMBOL
+        value: XRP
+      - key: LEVERAGE
+        value: 100
+      - key: INITIAL_CAPITAL_INR
+        value: 0.0
+      - key: MARGIN_RATIO_PER_TRADE
+        value: 0.25
+      - key: MAX_CONTRACTS_PER_TRADE
+        value: 50000
+      - key: DELTA_API_KEY
+        sync: false
+      - key: DELTA_API_SECRET
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
