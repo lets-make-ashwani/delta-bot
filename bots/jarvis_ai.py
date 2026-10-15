@@ -38,10 +38,17 @@ class JarvisAIBot(BaseBot):
                 '  "summary": "1 concise sentence with executive rationale"\n'
                 "}"
             )
+            try:
+                from bots.self_learning import swarm_learner
+                learned_rules = swarm_learner.get_learned_rules_for_prompt()
+                rules_block = "\nSelf-Learned Rules from Past Trades:\n" + "\n".join([f"• {r}" for r in learned_rules]) if learned_rules else ""
+            except Exception:
+                rules_block = ""
+
             user_prompt = (
                 f"Instrument: {symbol} at ${mark_price:.4f}\n"
                 f"Regime: {regime} | RSI: {rsi:.1f} | 9/21 EMA Trend: {'Bullish (9>21)' if ema_fast > ema_slow else 'Bearish (9<21)'}\n"
-                f"Orderbook Depth Imbalance: {imbalance:+.2f} | News Catalyst: {news_label} (Score: {news_score:+.2f})\n"
+                f"Orderbook Depth Imbalance: {imbalance:+.2f} | News Catalyst: {news_label} (Score: {news_score:+.2f}){rules_block}\n"
                 f"Deliver your executive quantitative verdict now."
             )
             candidate_models = [config.GROQ_MODEL, "qwen/qwen3.8-27b", "openai/gpt-oss-120b"]

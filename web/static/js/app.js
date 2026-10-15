@@ -315,6 +315,11 @@ function renderDashboard(data) {
   // 4. Bot Swarm Deliberation Matrix
   renderSwarmTable(data);
 
+  // 4.5 Self-Learning Neural Brain & Dynamic Weights
+  if (data.self_learning) {
+    renderSelfLearning(data.self_learning);
+  }
+
   // 5. Closed Trades Ledger
   renderTradesTable(metrics.trades || []);
 
@@ -336,9 +341,43 @@ function renderDashboard(data) {
   }
 }
 
+function renderSelfLearning(learning) {
+  if (!learning) return;
+  const countEl = document.getElementById("learning-trade-count");
+  if (countEl) countEl.innerText = `${learning.total_trades_analyzed || 0} Trades Trained`;
+  
+  const winEl = document.getElementById("learning-win-rate");
+  if (winEl) winEl.innerText = `${(learning.win_rate || 0).toFixed(1)}%`;
+
+  const lessonEl = document.getElementById("learning-latest-lesson");
+  if (lessonEl && learning.latest_reflection) {
+    lessonEl.innerText = `"${learning.latest_reflection}"`;
+  }
+
+  const grid = document.getElementById("learning-weights-grid");
+  if (grid && learning.bot_weights) {
+    grid.innerHTML = Object.entries(learning.bot_weights).map(([bot, w]) => {
+      const isHigh = w >= 1.1;
+      const isLow = w < 0.9;
+      const color = isHigh ? "var(--green)" : (isLow ? "var(--gold)" : "var(--cyan)");
+      const bg = isHigh ? "rgba(34,197,94,0.12)" : (isLow ? "rgba(245,158,11,0.12)" : "rgba(0,242,254,0.08)");
+      const border = isHigh ? "rgba(34,197,94,0.3)" : (isLow ? "rgba(245,158,11,0.3)" : "rgba(0,242,254,0.2)");
+      const shortName = bot.replace(" Quantitative Brain", "").replace(" Scalper", "").replace(" Bot", "");
+      return `
+        <div style="background: ${bg}; border: 1px solid ${border}; border-radius: 6px; padding: 3px 8px; font-size: 0.75rem; display: flex; align-items: center; gap: 5px;">
+          <span style="color: #cbd5e1;">${shortName}</span>
+          <span class="mono" style="color: ${color}; font-weight: 700;">${w.toFixed(2)}x</span>
+        </div>
+      `;
+    }).join("");
+  }
+}
+
 function renderSwarmTable(data) {
   const tbody = document.getElementById("swarm-tbody");
   if (!tbody) return;
+
+  const weights = (data.self_learning && data.self_learning.bot_weights) || {};
 
   const bots = [
     { name: "Market Analyst Bot", icon: "🌐", sig: data.analyst_signal },
@@ -369,10 +408,12 @@ function renderSwarmTable(data) {
 
     const conf = b.sig && b.sig.confidence !== undefined ? `${Math.round(b.sig.confidence * 100)}%` : "--";
     const rat = (b.sig && b.sig.rationale) || "Scanning market conditions...";
+    const weightVal = weights[b.name] !== undefined ? weights[b.name] : (weights[b.name.replace(" Bot", "")] || null);
+    const weightBadge = weightVal ? `<span class="badge" style="font-size: 0.65rem; margin-left: 6px; background: rgba(0,242,254,0.1); color: var(--cyan);">${weightVal.toFixed(2)}x</span>` : "";
 
     return `
       <tr>
-        <td class="bot-name-cell"><span>${b.icon}</span> <span>${b.name}</span></td>
+        <td class="bot-name-cell"><span>${b.icon}</span> <span>${b.name}</span>${weightBadge}</td>
         <td><span class="vote-badge ${actClass}">${act}</span></td>
         <td class="mono" style="color: var(--cyan);">${conf}</td>
         <td style="color: var(--text-muted); font-size: 0.8rem;">${rat}</td>

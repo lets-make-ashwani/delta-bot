@@ -31,6 +31,7 @@ from bots.strategy_generator import StrategyGeneratorBot
 from bots.news_analyst import NewsAnalystBot
 from bots.jarvis_ai import JarvisAIBot
 from bots.risk_guardian import RiskGuardianBot
+from bots.self_learning import swarm_learner
 from bots.base_bot import Signal
 from config import config
 
@@ -39,6 +40,8 @@ logger = logging.getLogger("SwarmOrchestrator")
 class SwarmOrchestrator:
     def __init__(self):
         self.exchange = DeltaExchangeManager()
+        self.learner = swarm_learner
+        self.active_trade_context = {}
         
         # Instantiate Complete Bot Swarm Desk
         self.analyst = MarketAnalystBot()
@@ -176,46 +179,55 @@ class SwarmOrchestrator:
 
         if closed_trade:
             self.risk_officer.record_trade_result(closed_trade)
+            self.learner.process_trade_outcome(closed_trade, self.active_trade_context)
+            self.active_trade_context = {}
 
         # List of all active strategy signals
         all_signals = [mom_sig, mr_sig, wick_sig, vwap_sig, wall_sig, div_sig, jarvis_sig]
 
-        # Step 8: Multi-Agent Consensus & Sniper Prioritization
+        # Step 8: Multi-Agent Consensus with Self-Learned Reinforcement Weights
         candidate_signal: Optional[Signal] = None
 
-        # A. Check for High-Conviction Sniper Triggers (Confidence >= 0.75)
-        sniper_candidates = [s for s in all_signals if s.action in ["BUY", "SELL"] and s.confidence >= 0.75]
+        # Each bot's vote confidence is scaled by its dynamic self-trained weight
+        weighted_signals = []
+        for s in all_signals:
+            w = self.learner.get_bot_weight(s.bot_name)
+            eff_conf = min(0.99, s.confidence * w)
+            weighted_signals.append((s, eff_conf, w))
+
+        # A. Check for High-Conviction Sniper Triggers (Effective Confidence >= 0.75)
+        sniper_candidates = [item for item in weighted_signals if item[0].action in ["BUY", "SELL"] and item[1] >= 0.75]
         if sniper_candidates:
-            # Pick highest confidence sniper
-            best_sniper = max(sniper_candidates, key=lambda s: s.confidence)
+            # Pick highest effective confidence sniper
+            best_sniper, best_eff_conf, best_w = max(sniper_candidates, key=lambda x: x[1])
             entry_price = ob_metrics.get("best_bid") if best_sniper.action == "BUY" else ob_metrics.get("best_ask")
             candidate_signal = Signal(
                 bot_name=best_sniper.bot_name,
                 action=best_sniper.action,
-                confidence=best_sniper.confidence,
-                rationale=best_sniper.rationale,
+                confidence=best_eff_conf,
+                rationale=f"[Learned Weight: {best_w:.2f}x] {best_sniper.rationale}",
                 entry_price=entry_price
             )
 
-        # B. Fallback: Weighted Swarm Consensus
+        # B. Fallback: Self-Weighted Swarm Consensus
         if not candidate_signal:
-            buy_votes = sum(s.confidence for s in all_signals if s.action == "BUY")
-            sell_votes = sum(s.confidence for s in all_signals if s.action == "SELL")
+            buy_votes = sum(eff_conf for s, eff_conf, w in weighted_signals if s.action == "BUY")
+            sell_votes = sum(eff_conf for s, eff_conf, w in weighted_signals if s.action == "SELL")
             
             if buy_votes >= 1.25:
                 candidate_signal = Signal(
-                    bot_name="Swarm Consensus",
+                    bot_name="Self-Adaptive Swarm",
                     action="BUY",
                     confidence=min(0.95, buy_votes / 2.2),
-                    rationale=f"Swarm BUY Consensus ({buy_votes:.2f} score across bots)",
+                    rationale=f"Self-Adaptive Swarm BUY Consensus ({buy_votes:.2f} score across trained bots)",
                     entry_price=ob_metrics.get("best_bid")
                 )
             elif sell_votes >= 1.25:
                 candidate_signal = Signal(
-                    bot_name="Swarm Consensus",
+                    bot_name="Self-Adaptive Swarm",
                     action="SELL",
                     confidence=min(0.95, sell_votes / 2.2),
-                    rationale=f"Swarm SELL Consensus ({sell_votes:.2f} score across bots)",
+                    rationale=f"Self-Adaptive Swarm SELL Consensus ({sell_votes:.2f} score across trained bots)",
                     entry_price=ob_metrics.get("best_ask")
                 )
 
@@ -235,6 +247,11 @@ class SwarmOrchestrator:
                 )
                 if execution_result and execution_result.get("success"):
                     self.risk_officer.last_trade_time = time.time()
+                    self.active_trade_context = {
+                        "regime": state.get("regime", "RANGING_CHOP"),
+                        "trigger_bot": candidate_signal.bot_name,
+                        "voting_records": {s.bot_name: s.action for s in all_signals}
+                    }
 
         result_payload = {
             "state": state,
@@ -253,7 +270,8 @@ class SwarmOrchestrator:
             "execution_result": execution_result,
             "closed_trade": closed_trade,
             "trade_metrics": self.exchange.get_trade_metrics(),
-            "adaptive_adjustments": adaptive_adjustments
+            "adaptive_adjustments": adaptive_adjustments,
+            "self_learning": self.learner.get_dashboard_summary()
         }
         self.latest_state = result_payload
         return result_payload

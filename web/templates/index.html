@@ -218,8 +218,35 @@
 
       </div>
 
-      <!-- RIGHT COLUMN: News Feed, Closed Trades, Console -->
+      <!-- RIGHT COLUMN: Self-Learning Brain, News Feed, Closed Trades, Console -->
       <div class="col-right">
+
+        <!-- Self-Improving Neural Brain & Reinforcement Learning Panel -->
+        <div class="glass-card" style="border-left: 3px solid var(--purple);">
+          <div class="section-header">
+            <div class="section-title">
+              <span>🧬</span> SELF-IMPROVING NEURAL BRAIN
+            </div>
+            <span class="badge" id="learning-trade-count" style="background: rgba(168,85,247,0.18); color: var(--purple);">0 Trades Trained</span>
+          </div>
+
+          <div style="font-size: 0.8rem; margin-bottom: 10px; color: var(--text-dim); display: flex; justify-content: space-between;">
+            <span>Reinforcement Bot Weights:</span>
+            <span>Win Rate: <strong id="learning-win-rate" class="mono" style="color: var(--green);">0.0%</strong></span>
+          </div>
+          <div id="learning-weights-grid" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px;">
+            <!-- Populated by app.js -->
+          </div>
+
+          <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 10px 14px;">
+            <div style="font-size: 0.72rem; text-transform: uppercase; color: var(--cyan); font-weight: 700; margin-bottom: 4px;">
+              💡 Groq AI Post-Mortem Lesson from Real Trades:
+            </div>
+            <div id="learning-latest-lesson" style="font-size: 0.82rem; color: #e2e8f0; line-height: 1.4;">
+              Accumulating live market trade experience...
+            </div>
+          </div>
+        </div>
 
         <!-- Live Crypto News & Catalysts -->
         <div class="glass-card">
