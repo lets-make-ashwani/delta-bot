@@ -459,10 +459,16 @@ class DeltaExchangeManager:
         if not self.auth_client:
             return {"success": False, "reason": "No auth client"}
         try:
-            # 1. Cancel existing stop orders for this product
-            self.auth_client.cancel_all_orders({'product_id': self.product_id})
+            # 1. Cleanly cancel any existing pending stop-loss orders for this product
+            try:
+                live_orders = self.auth_client.get_live_orders({'product_id': self.product_id})
+                for o in live_orders:
+                    if o.get("stop_price") and o.get("id"):
+                        self.auth_client.cancel_order(self.product_id, o.get("id"))
+            except Exception as e_cancel:
+                logger.debug(f"Prior stop order cleanup note: {e_cancel}")
             
-            # 2. Place updated stop-loss order
+            # 2. Place updated single trailing stop-loss order
             stop_side = "sell" if side.upper() == "BUY" else "buy"
             res = self.auth_client.place_stop_order(
                 product_id=self.product_id,
