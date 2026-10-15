@@ -174,6 +174,9 @@ class SwarmOrchestrator:
                 closed_trade = self.exchange.close_position(reason="AI_REVERSAL_EXIT")
                 active_position = None
 
+        if closed_trade:
+            self.risk_officer.record_trade_result(closed_trade)
+
         # List of all active strategy signals
         all_signals = [mom_sig, mr_sig, wick_sig, vwap_sig, wall_sig, div_sig, jarvis_sig]
 
@@ -230,6 +233,8 @@ class SwarmOrchestrator:
                     sl_price=risk_evaluation["stop_loss"],
                     tp_price=risk_evaluation["take_profit"]
                 )
+                if execution_result and execution_result.get("success"):
+                    self.risk_officer.last_trade_time = time.time()
 
         result_payload = {
             "state": state,

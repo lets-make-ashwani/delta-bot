@@ -8,26 +8,75 @@ Enforces:
 4. Position limits (strictly 1 active scalp at a time).
 """
 
+import time
 import math
+import logging
 from typing import Dict, Any, Optional
 from bots.base_bot import BaseBot, Signal
 from config import config
 
+logger = logging.getLogger("RiskGuardian")
+
 class RiskGuardianBot(BaseBot):
     def __init__(self):
         super().__init__(name="Chief Risk Officer")
+        self.last_trade_time = 0.0
+        self.cooldown_sec = 45.0           # Minimum 45s between trades to prevent churning
+        self.consecutive_losses = 0        # Consecutive loss counter
+        self.max_consecutive_losses = 2    # Trigger circuit breaker after 2 consecutive losses
+        self.circuit_breaker_until = 0.0   # Timestamp until which trading is halted
+
+    def record_trade_result(self, trade_result: Dict[str, Any]):
+        """Records closed trade outcome to trigger circuit breakers or reset loss streaks."""
+        self.last_trade_time = time.time()
+        pnl = 0.0
+        if isinstance(trade_result, dict):
+            if "pnl_inr" in trade_result:
+                pnl = float(trade_result.get("pnl_inr", 0.0))
+            elif "trade" in trade_result and isinstance(trade_result["trade"], dict):
+                pnl = float(trade_result["trade"].get("pnl_inr", 0.0))
+
+        if pnl < 0:
+            self.consecutive_losses += 1
+            logger.warning(f"⚠️ [RISK ALERT] Loss recorded: ₹{pnl:+.2f} (Consecutive losses: {self.consecutive_losses})")
+            if self.consecutive_losses >= self.max_consecutive_losses:
+                self.circuit_breaker_until = time.time() + 300.0  # 5-minute cooling off period
+                logger.error(f"🛑 [CIRCUIT BREAKER TRIGGERED] {self.consecutive_losses} consecutive losses! Trading halted for 5 minutes.")
+        else:
+            if self.consecutive_losses > 0:
+                logger.info(f"✅ Loss streak broken with profit: ₹{pnl:+.2f}. Streak reset to 0.")
+            self.consecutive_losses = 0
 
     def evaluate_order(self, proposed_signal: Signal, state: Dict[str, Any]) -> Dict[str, Any]:
-        """Validates or vetoes a proposed trade signal. Calculates exact contract size and bracket levels."""
+        """Validates or vetoes a proposed trade signal. Enforces cooldowns, circuit breakers, and sizing."""
         if proposed_signal.action not in ["BUY", "SELL"]:
             return {"approved": False, "reason": "No actionable direction."}
 
-        # 1. Check if a position is already open
+        now = time.time()
+
+        # 1. Circuit Breaker Check (Cooldown after loss streak)
+        if now < self.circuit_breaker_until:
+            remaining = int(self.circuit_breaker_until - now)
+            return {
+                "approved": False,
+                "reason": f"Circuit breaker active ({remaining}s remaining). Halted to prevent drawdowns."
+            }
+
+        # 2. Overtrading Cooldown Check (Minimum interval between scalps)
+        time_since_last = now - self.last_trade_time
+        if self.last_trade_time > 0 and time_since_last < self.cooldown_sec:
+            remaining = int(self.cooldown_sec - time_since_last)
+            return {
+                "approved": False,
+                "reason": f"Overtrading cooldown active ({remaining}s remaining). Market digestion in progress."
+            }
+
+        # 3. Check if a position is already open (Strictly 1 position at a time)
         active_pos = state.get("active_position")
         if active_pos is not None:
             return {"approved": False, "reason": "Position already open. 100x multi-positioning is blocked."}
 
-        # 2. Check Orderbook Spread
+        # 4. Check Orderbook Spread
         ob = state.get("orderbook", {})
         spread_pct = ob.get("spread_pct", 999.0)
         if spread_pct > config.MAX_ALLOWABLE_SPREAD_PCT:
@@ -36,7 +85,7 @@ class RiskGuardianBot(BaseBot):
                 "reason": f"Spread too wide ({spread_pct:.3f}% > max {config.MAX_ALLOWABLE_SPREAD_PCT:.3f}%). Slippage risk at 100x."
             }
 
-        # 3. Dynamic Capital & Multi-Bullet Position Sizing
+        # 5. Dynamic Capital & Multi-Bullet Position Sizing
         balance_info = state.get("balance_info", {})
         available_margin_inr = balance_info.get("available_margin_inr") or balance_info.get("balance_inr", 50000.0)
         
