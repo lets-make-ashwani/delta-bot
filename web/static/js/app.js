@@ -303,42 +303,58 @@ function renderDashboard(data) {
   }
 
   // 3. Active 100x Position Card
-  const posCard = document.getElementById("position-card");
+  const posCard = document.getElementById("sec-position") || document.getElementById("position-card");
   const activeBody = document.getElementById("pos-active-body");
   const idleBody = document.getElementById("pos-idle-body");
   const posBadge = document.getElementById("pos-status-badge");
 
-  if (pos) {
-    posCard.classList.add("pos-active");
-    activeBody.style.display = "block";
-    idleBody.style.display = "none";
+  if (pos && (pos.contracts > 0 || (pos.size && parseInt(pos.size) !== 0))) {
+    if (posCard) posCard.classList.add("pos-active");
+    if (activeBody) activeBody.style.display = "block";
+    if (idleBody) idleBody.style.display = "none";
 
-    posBadge.innerText = "OPEN IN MARKET";
-    posBadge.className = "badge badge-live";
+    if (posBadge) {
+      posBadge.innerText = "OPEN IN MARKET";
+      posBadge.className = "badge badge-live";
+    }
 
     const sideEl = document.getElementById("pos-side");
-    sideEl.innerText = pos.side;
-    sideEl.className = `badge ${pos.side === 'BUY' ? 'vote-buy' : 'vote-sell'}`;
+    if (sideEl) {
+      sideEl.innerText = pos.side || "BUY";
+      sideEl.className = `badge ${(pos.side || 'BUY') === 'BUY' ? 'vote-buy' : 'vote-sell'}`;
+    }
 
-    document.getElementById("pos-size-text").innerText = `${pos.contracts.toLocaleString()} Contracts (Margin: ₹${pos.margin_inr.toFixed(2)})`;
+    const contractsCount = pos.contracts || pos.size || 0;
+    const marginAmount = pos.margin_inr !== undefined ? pos.margin_inr : 0.0;
+    const sizeTextEl = document.getElementById("pos-size-text");
+    if (sizeTextEl) {
+      sizeTextEl.innerText = `${contractsCount.toLocaleString()} Contracts (Margin: ₹${marginAmount.toFixed(2)})`;
+    }
     
     const pnl = pos.unrealized_pnl_inr || 0.0;
-    const roi = pos.margin_inr > 0 ? (pnl / pos.margin_inr) * 100 : 0.0;
+    const roi = marginAmount > 0 ? (pnl / marginAmount) * 100 : 0.0;
     
     const posPnlEl = document.getElementById("pos-pnl");
     const posRoiEl = document.getElementById("pos-roi");
-    
-    posPnlEl.innerText = `${pnl >= 0 ? '+' : ''}₹${pnl.toFixed(2)}`;
-    posRoiEl.innerText = `(${roi >= 0 ? '+' : ''}${roi.toFixed(1)}%)`;
-    
     const pColor = pnl >= 0 ? "var(--green)" : "var(--red)";
-    posPnlEl.style.color = pColor;
-    posRoiEl.style.color = pColor;
+    
+    if (posPnlEl) {
+      posPnlEl.innerText = `${pnl >= 0 ? '+' : ''}₹${pnl.toFixed(2)}`;
+      posPnlEl.style.color = pColor;
+    }
+    if (posRoiEl) {
+      posRoiEl.innerText = `(${roi >= 0 ? '+' : ''}${roi.toFixed(1)}%)`;
+      posRoiEl.style.color = pColor;
+    }
 
-    document.getElementById("pos-entry").innerText = `$${(pos.entry_price || 0).toFixed(4)}`;
-    document.getElementById("pos-sl").innerText = `$${(pos.stop_loss || 0).toFixed(4)}`;
-    document.getElementById("pos-tp").innerText = `$${(pos.take_profit || 0).toFixed(4)}`;
-    document.getElementById("pos-liq").innerText = `$${(pos.liquidation_price || 0).toFixed(4)}`;
+    const entryEl = document.getElementById("pos-entry");
+    if (entryEl) entryEl.innerText = `$${(pos.entry_price || 0).toFixed(4)}`;
+    const slEl = document.getElementById("pos-sl");
+    if (slEl) slEl.innerText = `$${(pos.stop_loss || 0).toFixed(4)}`;
+    const tpEl = document.getElementById("pos-tp");
+    if (tpEl) tpEl.innerText = `$${(pos.take_profit || 0).toFixed(4)}`;
+    const liqEl = document.getElementById("pos-liq");
+    if (liqEl) liqEl.innerText = `$${(pos.liquidation_price || 0).toFixed(4)}`;
 
     const btnTest = document.getElementById("btn-test-scalp");
     const btnClose = document.getElementById("btn-close-pos");
@@ -362,17 +378,19 @@ function renderDashboard(data) {
     }
 
   } else {
-    posCard.classList.remove("pos-active");
-    activeBody.style.display = "none";
-    idleBody.style.display = "block";
+    if (posCard) posCard.classList.remove("pos-active");
+    if (activeBody) activeBody.style.display = "none";
+    if (idleBody) idleBody.style.display = "block";
 
     const adaptiveBox = document.getElementById("pos-adaptive-box");
     if (adaptiveBox) adaptiveBox.style.display = "none";
 
-    posBadge.innerText = isAutoPilot ? "AUTONOMOUS SCANNING" : "AUTO-PILOT PAUSED";
-    posBadge.className = "badge";
-    posBadge.style.background = isAutoPilot ? "rgba(0, 242, 254, 0.15)" : "rgba(255,255,255,0.06)";
-    posBadge.style.color = isAutoPilot ? "var(--cyan)" : "var(--text-dim)";
+    if (posBadge) {
+      posBadge.innerText = isAutoPilot ? "AUTONOMOUS SCANNING" : "AUTO-PILOT PAUSED";
+      posBadge.className = "badge";
+      posBadge.style.background = isAutoPilot ? "rgba(0, 242, 254, 0.15)" : "rgba(255,255,255,0.06)";
+      posBadge.style.color = isAutoPilot ? "var(--cyan)" : "var(--text-dim)";
+    }
 
     const btnTest = document.getElementById("btn-test-scalp");
     const btnClose = document.getElementById("btn-close-pos");
@@ -381,24 +399,44 @@ function renderDashboard(data) {
   }
 
   // 3.5 Multi-Asset Quant Radar (BTC, ETH, SOL, XRP)
-  if (data.multi_asset_radar) {
-    renderMultiAssetRadar(data.multi_asset_radar, data.top_opportunity);
+  try {
+    if (data.multi_asset_radar) {
+      renderMultiAssetRadar(data.multi_asset_radar, data.top_opportunity);
+    }
+  } catch (e) {
+    console.error("Error rendering radar:", e);
   }
 
   // 4. Bot Swarm Deliberation Matrix
-  renderSwarmTable(data);
+  try {
+    renderSwarmTable(data);
+  } catch (e) {
+    console.error("Error rendering swarm:", e);
+  }
 
   // 4.5 Self-Learning Neural Brain & Dynamic Weights
-  if (data.self_learning) {
-    renderSelfLearning(data.self_learning);
+  try {
+    if (data.self_learning) {
+      renderSelfLearning(data.self_learning);
+    }
+  } catch (e) {
+    console.error("Error rendering self-learning:", e);
   }
 
   // 5. Closed Trades Ledger
-  renderTradesTable(metrics.trades || []);
+  try {
+    renderTradesTable(metrics.trades || []);
+  } catch (e) {
+    console.error("Error rendering trades:", e);
+  }
 
   // 6. News Articles Feed
-  if (news.articles && news.articles.length > 0) {
-    renderNewsFeed(news.articles);
+  try {
+    if (news.articles && news.articles.length > 0) {
+      renderNewsFeed(news.articles);
+    }
+  } catch (e) {
+    console.error("Error rendering news:", e);
   }
 
   // 7. Auto-pilot button status sync
