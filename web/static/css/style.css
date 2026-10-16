@@ -384,10 +384,94 @@ body {
   gap: 20px;
 }
 
+/* 4-Coin Live Mark Prices Grid */
+.live-prices-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 2px;
+}
+
+.coin-price-card {
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid var(--border);
+  background: rgba(14, 19, 31, 0.75);
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.coin-price-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(0, 242, 254, 0.4);
+}
+
+.coin-price-card.cpc-active {
+  border-color: var(--cyan);
+  box-shadow: 0 0 16px rgba(0, 242, 254, 0.25);
+  background: linear-gradient(135deg, rgba(0, 242, 254, 0.08), rgba(15, 23, 42, 0.85));
+}
+
+.coin-price-card.cpc-top-hunt {
+  border-color: var(--green);
+  box-shadow: 0 0 16px rgba(34, 197, 94, 0.25);
+}
+
+.cpc-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.cpc-sym {
+  font-weight: 800;
+  font-size: 0.95rem;
+  color: #fff;
+}
+
+.cpc-spread {
+  font-size: 0.72rem;
+  color: var(--cyan);
+  background: rgba(0, 242, 254, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.cpc-price {
+  font-size: 1.40rem;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.5px;
+  margin: 2px 0;
+}
+
+.cpc-bot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+
+.cpc-name {
+  color: var(--text-muted);
+}
+
+.cpc-status {
+  font-weight: 700;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+}
+
 /* KPI Ribbon */
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 14px;
 }
 

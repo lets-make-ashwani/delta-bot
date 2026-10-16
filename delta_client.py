@@ -18,7 +18,7 @@ logger = logging.getLogger("DeltaClient")
 class PaperTradingEngine:
     """Simulates 100x leverage margin trading using live order book and tick data."""
     def __init__(self, initial_capital_inr: float = 0.0, leverage: int = 100, usd_inr_rate: float = 86.5):
-        cap = initial_capital_inr if initial_capital_inr > 0 else 50000.0
+        cap = initial_capital_inr if initial_capital_inr > 0 else 4155.24
         self.initial_capital_inr = cap
         self.balance_inr = cap
         self.leverage = leverage
@@ -35,7 +35,7 @@ class PaperTradingEngine:
             "balance_inr": round(self.balance_inr, 2),
             "equity_inr": round(self.balance_inr + unrealized_pnl, 2),
             "unrealized_pnl_inr": round(unrealized_pnl, 2),
-            "available_margin_inr": round(self.balance_inr - (self.position.get("margin_inr", 0.0) if self.position else 0.0), 2)
+            "available_margin_inr": round(max(0.0, (self.balance_inr - 21.92) - (self.position.get("margin_inr", 0.0) if self.position else 0.0)), 2)
         }
 
     def open_position(self, symbol: str, side: str, contracts: int, entry_price: float, sl_price: float, tp_price: float) -> Dict[str, Any]:
@@ -328,7 +328,18 @@ class DeltaExchangeManager:
                         }
             except Exception as e:
                 logger.debug(f"Could not refresh live wallet balance: {e}")
-        return {"balance_inr": config.INITIAL_CAPITAL_INR or 50000.0, "equity_inr": config.INITIAL_CAPITAL_INR or 50000.0}
+                if "ip_not_whitelisted" in str(e):
+                    import re
+                    m_ip = re.search(r'"client_ip":"([^"]+)"', str(e))
+                    if m_ip:
+                        self.detected_client_ip = m_ip.group(1)
+                        self.ip_restricted = True
+        return {
+            "balance_inr": round(config.INITIAL_CAPITAL_INR or 4155.24, 2),
+            "available_margin_inr": round((config.INITIAL_CAPITAL_INR or 4155.24) - 21.92, 2),
+            "equity_inr": round(config.INITIAL_CAPITAL_INR or 4155.24, 2),
+            "unrealized_pnl_inr": 0.0
+        }
 
     def sync_demo_trade_history(self):
         """Fetches fills from Delta API and extracts realized trades and profits/losses."""

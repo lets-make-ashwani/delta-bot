@@ -90,14 +90,65 @@
   <!-- Main Container -->
   <main class="dashboard-container">
 
-    <!-- KPI Ribbon -->
-    <section class="kpi-grid">
-      <div class="glass-card kpi-card">
-        <span class="kpi-label">Mark Price (<span id="kpi-symbol">XRPUSD</span>)</span>
-        <span class="kpi-value mono" id="kpi-price">$1.3720</span>
-        <span class="kpi-sub">Spread: <span id="kpi-spread" class="mono">0.007%</span></span>
+    <!-- 4-Coin Live Mark Price Ticker Strip -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+      <span style="font-size: 0.76rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.8px;">
+        ⚡ LIVE MARK PRICES (ALL 4 COINS)
+      </span>
+      <span style="font-size: 0.72rem; color: var(--cyan);">Tap any card to focus</span>
+    </div>
+    <section class="live-prices-grid" id="sec-prices">
+      <div class="glass-card coin-price-card" id="cpc-BTC" onclick="switchAssetFocus('BTC')">
+        <div class="cpc-top">
+          <span class="cpc-sym">BTCUSD</span>
+          <span class="cpc-spread mono" id="cpc-spread-BTC">0.005%</span>
+        </div>
+        <div class="cpc-price mono" id="cpc-price-BTC">$82,406.98</div>
+        <div class="cpc-bot">
+          <span class="cpc-name">Bitcoin</span>
+          <span class="cpc-status" id="cpc-status-BTC">SCANNING</span>
+        </div>
       </div>
 
+      <div class="glass-card coin-price-card" id="cpc-ETH" onclick="switchAssetFocus('ETH')">
+        <div class="cpc-top">
+          <span class="cpc-sym">ETHUSD</span>
+          <span class="cpc-spread mono" id="cpc-spread-ETH">0.002%</span>
+        </div>
+        <div class="cpc-price mono" id="cpc-price-ETH">$2,441.52</div>
+        <div class="cpc-bot">
+          <span class="cpc-name">Ethereum</span>
+          <span class="cpc-status" id="cpc-status-ETH">SCANNING</span>
+        </div>
+      </div>
+
+      <div class="glass-card coin-price-card" id="cpc-SOL" onclick="switchAssetFocus('SOL')">
+        <div class="cpc-top">
+          <span class="cpc-sym">SOLUSD</span>
+          <span class="cpc-spread mono" id="cpc-spread-SOL">0.021%</span>
+        </div>
+        <div class="cpc-price mono" id="cpc-price-SOL">$106.81</div>
+        <div class="cpc-bot">
+          <span class="cpc-name">Solana</span>
+          <span class="cpc-status" id="cpc-status-SOL">SCANNING</span>
+        </div>
+      </div>
+
+      <div class="glass-card coin-price-card" id="cpc-XRP" onclick="switchAssetFocus('XRP')">
+        <div class="cpc-top">
+          <span class="cpc-sym">XRPUSD</span>
+          <span class="cpc-spread mono" id="cpc-spread-XRP">0.037%</span>
+        </div>
+        <div class="cpc-price mono" id="cpc-price-XRP">$1.3355</div>
+        <div class="cpc-bot">
+          <span class="cpc-name">Ripple</span>
+          <span class="cpc-status" id="cpc-status-XRP">SCANNING</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Account KPI Ribbon -->
+    <section class="kpi-grid">
       <div class="glass-card kpi-card">
         <span class="kpi-label">Demo Wallet Balance</span>
         <span class="kpi-value mono" id="kpi-balance">₹4,155.24</span>
@@ -111,7 +162,7 @@
       </div>
 
       <div class="glass-card kpi-card">
-        <span class="kpi-label">Market Regime</span>
+        <span class="kpi-label">Market Regime (<span id="kpi-symbol">XRPUSD</span>)</span>
         <span class="kpi-value regime-text" id="kpi-regime">RANGING_CHOP</span>
         <span class="kpi-sub">Profile: <span id="kpi-profile">RANGE_HARVESTER</span></span>
       </div>

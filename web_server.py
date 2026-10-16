@@ -110,7 +110,9 @@ def get_status():
             "margin_ratio_pct": int(config.MARGIN_RATIO_PER_TRADE * 100),
             "max_contracts": config.MAX_CONTRACTS_PER_TRADE,
             "leverage": config.LEVERAGE,
-            "mode": config.MODE
+            "mode": config.MODE,
+            "detected_client_ip": getattr(orch.exchange, "detected_client_ip", "152.59.178.77"),
+            "ip_restricted": getattr(orch.exchange, "ip_restricted", False)
         }
     return jsonify(clean_data)
 

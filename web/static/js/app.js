@@ -204,16 +204,53 @@ function renderDashboard(data) {
   const metrics = data.trade_metrics || {};
   const sysConfig = data.system_config || {};
 
-  // 1. Navigation & KPIs
-  document.getElementById("nav-mode").innerText = `${(state.mode || "DEMO").toUpperCase()} ONLINE`;
-  document.getElementById("kpi-symbol").innerText = state.symbol || activeSymbol;
-  document.getElementById("kpi-price").innerText = `$${(state.mark_price || 0).toFixed(4)}`;
-  document.getElementById("kpi-spread").innerText = `${(ob.spread_pct || 0).toFixed(3)}%`;
+  // 1. Navigation & 4-Coin Live Mark Prices Strip
+  const navMode = document.getElementById("nav-mode");
+  if (navMode) navMode.innerText = `${(state.mode || "DEMO").toUpperCase()} ONLINE`;
+  const kpiSym = document.getElementById("kpi-symbol");
+  if (kpiSym) kpiSym.innerText = state.symbol || activeSymbol;
+
+  // Live 4-Coin Mark Prices (BTC, ETH, SOL, XRP)
+  const radar = data.multi_asset_radar || {};
+  ["BTC", "ETH", "SOL", "XRP"].forEach(coin => {
+    const item = radar[coin] || {};
+    const priceEl = document.getElementById(`cpc-price-${coin}`);
+    const spreadEl = document.getElementById(`cpc-spread-${coin}`);
+    const statusEl = document.getElementById(`cpc-status-${coin}`);
+    const cardEl = document.getElementById(`cpc-${coin}`);
+    
+    if (priceEl && item.mark_price !== undefined) {
+      const p = item.mark_price;
+      priceEl.innerText = p < 2 ? `$${p.toFixed(4)}` : `$${p.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    }
+    if (spreadEl && item.spread_pct !== undefined) {
+      spreadEl.innerText = `${item.spread_pct.toFixed(3)}%`;
+    }
+    if (statusEl && cardEl) {
+      if (item.is_active) {
+        statusEl.innerText = "ACTIVE FOCUS";
+        statusEl.style.color = "var(--cyan)";
+        cardEl.classList.add("cpc-active");
+        cardEl.classList.remove("cpc-top-hunt");
+      } else if (item.is_top_pick) {
+        statusEl.innerText = "TOP HUNT";
+        statusEl.style.color = "var(--green)";
+        cardEl.classList.add("cpc-top-hunt");
+        cardEl.classList.remove("cpc-active");
+      } else {
+        statusEl.innerText = item.action || "SCANNING";
+        statusEl.style.color = item.action === "BUY" ? "var(--green)" : (item.action === "SELL" ? "var(--red)" : "var(--text-dim)");
+        cardEl.classList.remove("cpc-active");
+        cardEl.classList.remove("cpc-top-hunt");
+      }
+    }
+  });
 
   // Balance & Available Margin
-  const balInr = bal.balance_inr !== undefined ? bal.balance_inr : 68975.30;
-  const availInr = bal.available_margin_inr !== undefined ? bal.available_margin_inr : 23079.61;
-  document.getElementById("kpi-balance").innerText = `₹${balInr.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+  const balInr = bal.balance_inr !== undefined ? bal.balance_inr : 4155.24;
+  const availInr = bal.available_margin_inr !== undefined ? bal.available_margin_inr : 4133.32;
+  const balEl = document.getElementById("kpi-balance");
+  if (balEl) balEl.innerText = `₹${balInr.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
   
   const availEl = document.getElementById("kpi-avail-margin");
   if (availEl) {
@@ -368,6 +405,20 @@ function renderDashboard(data) {
   if (sysConfig.auto_execution !== undefined) {
     isAutoPilot = sysConfig.auto_execution;
     updateAutoButtonUI(isAutoPilot);
+  }
+
+  // 7.5 IP Restriction banner alert
+  const alertBanner = document.getElementById("ip-alert-banner");
+  const ipText = document.getElementById("client-ip-text");
+  if (alertBanner) {
+    if (sysConfig.ip_restricted) {
+      alertBanner.style.display = "block";
+      if (ipText && sysConfig.detected_client_ip) {
+        ipText.innerText = sysConfig.detected_client_ip;
+      }
+    } else {
+      alertBanner.style.display = "none";
+    }
   }
 
   // 8. Console Logging for new consensus
