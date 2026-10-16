@@ -12,8 +12,10 @@ class JarvisAIBot(BaseBot):
     def __init__(self):
         super().__init__(name="Jarvis AI Quantitative Brain")
         self.last_groq_time = 0
-        self.groq_cache: Optional[Dict[str, Any]] = None
-        self.cache_duration_sec = 12.0  # Safe rate limit for Groq free tier (30 req/min)
+        self.groq_cache_by_symbol: Dict[str, Dict[str, Any]] = {}
+        self.last_groq_times: Dict[str, float] = {}
+        self.rate_limit_until: float = 0.0
+        self.cache_duration_sec = 45.0  # Cache LLM verdict for 45s per asset to preserve free tier quota
 
     def _query_groq_lpu(self, symbol: str, mark_price: float, regime: str, rsi: float, ema_fast: float, ema_slow: float, imbalance: float, news_label: str, news_score: float) -> Optional[Dict[str, Any]]:
         """Invokes Groq LPU with Llama 3.3 70B for ultra-fast deep quantitative reasoning."""
@@ -21,8 +23,15 @@ class JarvisAIBot(BaseBot):
             return None
 
         now = time.time()
-        if self.groq_cache and (now - self.last_groq_time < self.cache_duration_sec):
-            return self.groq_cache
+        # If currently under 429 rate limit cooldown, use cache or fallback
+        if now < self.rate_limit_until:
+            if symbol in self.groq_cache_by_symbol:
+                return self.groq_cache_by_symbol[symbol]
+            return None
+
+        # Check per-symbol cache
+        if symbol in self.groq_cache_by_symbol and (now - self.last_groq_times.get(symbol, 0) < self.cache_duration_sec):
+            return self.groq_cache_by_symbol[symbol]
 
         try:
             headers = {
@@ -52,11 +61,7 @@ class JarvisAIBot(BaseBot):
                 f"Deliver your executive quantitative verdict now."
             )
             candidate_models = [config.GROQ_MODEL, "qwen/qwen3.8-27b", "openai/gpt-oss-120b"]
-            # Remove duplicates preserving order
-            models_to_try = []
-            for m in candidate_models:
-                if m and m not in models_to_try:
-                    models_to_try.append(m)
+            models_to_try = [m for m in candidate_models if m]
 
             for model_name in models_to_try:
                 try:
@@ -75,15 +80,22 @@ class JarvisAIBot(BaseBot):
                         data = resp.json()
                         content = data["choices"][0]["message"]["content"]
                         parsed = json.loads(content)
-                        self.groq_cache = parsed
-                        self.last_groq_time = now
+                        self.groq_cache_by_symbol[symbol] = parsed
+                        self.last_groq_times[symbol] = now
                         self.last_model_used = model_name
-                        logger.info(f"⚡ [GROQ LPU ({model_name})] {parsed.get('verdict')} ({parsed.get('quant_score'):+d}/100): {parsed.get('summary')}")
+                        logger.info(f"⚡ [JARVIS AI ({symbol})] {parsed.get('verdict')} ({parsed.get('quant_score'):+d}/100): {parsed.get('summary')}")
                         return parsed
+                    elif resp.status_code == 429:
+                        # Enter a clean 90-second cooldown without spamming terminal
+                        self.rate_limit_until = now + 90.0
+                        logger.info("Groq API quota limit reached. Pausing cloud LLM for 90s; running high-frequency local quantitative indicators.")
+                        if symbol in self.groq_cache_by_symbol:
+                            return self.groq_cache_by_symbol[symbol]
+                        return None
                     elif resp.status_code == 404:
-                        continue  # Try next model candidate
+                        continue
                     else:
-                        logger.warning(f"Groq API ({model_name}) returned HTTP {resp.status_code}: {resp.text}")
+                        logger.debug(f"Groq API ({model_name}) returned HTTP {resp.status_code}")
                 except Exception as inner_err:
                     logger.debug(f"Groq query attempt ({model_name}) error: {inner_err}")
                     continue

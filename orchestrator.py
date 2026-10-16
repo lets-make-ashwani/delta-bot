@@ -170,7 +170,7 @@ class SwarmOrchestrator:
             "candidate_signal": candidate_signal
         }
 
-    def scan_coin(self, coin: str, balance_info: Dict[str, float]) -> Dict[str, Any]:
+    def scan_coin(self, coin: str, balance_info: Dict[str, float], active_position: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Analyzes a single crypto asset across all strategies and microstructure metrics."""
         prod = self.exchange._resolve_product(coin, self.exchange.target_url)
         sym = prod.get("symbol", f"{coin}USD")
@@ -191,11 +191,11 @@ class SwarmOrchestrator:
             "orderbook": ob_metrics,
             "candles": candles,
             "indicators": indicators,
-            "active_position": None,
+            "active_position": active_position,
             "balance_info": balance_info,
             "iteration": self.iteration,
             "mode": self.exchange.mode,
-            "leverage": config.LEVERAGE
+            "leverage": 50 if "SOL" in coin.upper() else config.LEVERAGE
         }
 
         eval_res = self.evaluate_symbol_signals(coin_state)
@@ -239,7 +239,7 @@ class SwarmOrchestrator:
         # Step 1: Scan all 4 assets concurrently for maximum responsiveness
         radar_results: Dict[str, Dict[str, Any]] = {}
         with ThreadPoolExecutor(max_workers=4) as executor:
-            future_to_coin = {executor.submit(self.scan_coin, coin, balance_info): coin for coin in SUPPORTED_SYMBOLS}
+            future_to_coin = {executor.submit(self.scan_coin, coin, balance_info, active_position): coin for coin in SUPPORTED_SYMBOLS}
             for future in future_to_coin:
                 coin = future_to_coin[future]
                 try:

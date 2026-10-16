@@ -173,6 +173,8 @@ class DeltaExchangeManager:
         self.detected_client_ip = "152.59.178.77"
         self.ip_whitelisted = False
         self.ip_restricted = False
+        self.symbol_max_leverage = {"SOL": 50, "SOLUSD": 50}
+        self.active_leverage = config.LEVERAGE
 
         if self.mode in ["demo", "testnet", "live"] and config.API_KEY and config.API_SECRET:
             self.auth_client = DeltaRestClient(
@@ -181,30 +183,7 @@ class DeltaExchangeManager:
                 api_secret=config.API_SECRET
             )
             logger.info(f"Connected to Delta in {self.mode.upper()} mode at {self.target_url}")
-            try:
-                self.auth_client.set_leverage(self.product_id, config.LEVERAGE)
-                logger.info(f"Set {config.LEVERAGE}x leverage for {self.symbol} (ID: {self.product_id})")
-                self.ip_whitelisted = True
-                self.ip_restricted = False
-            except Exception as e:
-                err_str = str(e)
-                if "ip_not_whitelisted_for_api_key" in err_str:
-                    self.ip_restricted = True
-                    self.ip_whitelisted = False
-                    try:
-                        import json
-                        s = err_str.find("{")
-                        e_idx = err_str.rfind("}") + 1
-                        if s != -1 and e_idx != -1:
-                            err_data = json.loads(err_str[s:e_idx])
-                            detected = err_data.get("error", {}).get("context", {}).get("client_ip")
-                            if detected:
-                                self.detected_client_ip = detected
-                    except Exception:
-                        pass
-                    logger.warning(f"Delta API key IP not whitelisted. Delta detected client IP: {self.detected_client_ip}")
-                else:
-                    logger.warning(f"Could not automatically set leverage: {e}")
+            self.active_leverage = self._set_safe_leverage(self.product_id, config.LEVERAGE, self.symbol)
         else:
             if self.mode in ["demo", "testnet"] and (not config.API_KEY or not config.API_SECRET):
                 logger.warning(f"No API key provided for DEMO mode. Falling back to PAPER trading mode.")
@@ -264,6 +243,52 @@ class DeltaExchangeManager:
         self.products_cache[clean_name] = fallback
         return fallback
 
+    def _set_safe_leverage(self, product_id: int, target_leverage: int, symbol: str) -> int:
+        """Sets leverage, automatically respecting Delta's per-coin maximum leverage (e.g. 50x for SOL)."""
+        if not self.auth_client:
+            return target_leverage
+        
+        clean_sym = symbol.replace("USD", "").replace("USDT", "")
+        if hasattr(self, "symbol_max_leverage") and clean_sym in self.symbol_max_leverage:
+            target_leverage = min(target_leverage, self.symbol_max_leverage[clean_sym])
+
+        try:
+            self.auth_client.set_leverage(product_id, target_leverage)
+            logger.info(f"Set {target_leverage}x leverage for {symbol} (ID: {product_id})")
+            self.active_leverage = target_leverage
+            self.ip_whitelisted = True
+            self.ip_restricted = False
+            return target_leverage
+        except Exception as e:
+            err_str = str(e)
+            if "max_leverage_exceeded" in err_str:
+                try:
+                    import json
+                    s = err_str.find("{")
+                    e_idx = err_str.rfind("}") + 1
+                    if s != -1 and e_idx != -1:
+                        err_json = json.loads(err_str[s:e_idx])
+                        max_lev_str = err_json.get("error", {}).get("context", {}).get("max_leverage", "50")
+                        max_lev = int(float(max_lev_str))
+                        if not hasattr(self, "symbol_max_leverage"):
+                            self.symbol_max_leverage = {}
+                        self.symbol_max_leverage[clean_sym] = max_lev
+                        self.auth_client.set_leverage(product_id, max_lev)
+                        logger.info(f"Auto-capped leverage to maximum allowed {max_lev}x for {symbol} (ID: {product_id})")
+                        self.active_leverage = max_lev
+                        self.ip_whitelisted = True
+                        self.ip_restricted = False
+                        return max_lev
+                except Exception as e2:
+                    logger.warning(f"Failed auto-adjusting leverage for {symbol}: {e2}")
+            elif "ip_not_whitelisted_for_api_key" in err_str:
+                self.ip_restricted = True
+                self.ip_whitelisted = False
+                logger.warning("Delta API key IP not whitelisted.")
+            else:
+                logger.warning(f"Could not set leverage for {symbol}: {e}")
+        return target_leverage
+
     def switch_symbol(self, raw_symbol: str) -> bool:
         """Dynamically switches active instrument between BTC, ETH, SOL, XRP."""
         raw_upper = raw_symbol.upper().replace("USD", "").replace("USDT", "")
@@ -275,12 +300,7 @@ class DeltaExchangeManager:
                 self.product_id = prod["id"]
                 self.tick_size = float(prod.get("tick_size", "0.0001"))
                 self.contract_value = float(prod.get("contract_value", 1.0))
-                if self.auth_client:
-                    try:
-                        self.auth_client.set_leverage(self.product_id, config.LEVERAGE)
-                        logger.info(f"Set {config.LEVERAGE}x leverage for new symbol {self.symbol} (ID: {self.product_id})")
-                    except Exception as e:
-                        logger.warning(f"Could not set leverage on switch: {e}")
+                self.active_leverage = self._set_safe_leverage(self.product_id, config.LEVERAGE, self.symbol)
                 logger.info(f"Active trading symbol switched to: {self.symbol} (ID: {self.product_id}, Contract Value: {self.contract_value})")
                 return True
         return False
@@ -411,17 +431,39 @@ class DeltaExchangeManager:
         """Returns the active position directly from Delta Demo servers or Paper engine with live mark-to-market PnL."""
         if self.mode in ["demo", "live"] and self.auth_client:
             try:
-                m_pos = self.auth_client.get_margined_position(self.product_id)
+                # 1. Query all positions across the account to find any active open position
+                m_pos = None
+                try:
+                    all_pos_res = self.auth_client.request('GET', '/v2/positions/margined', auth=True).json()
+                    positions_list = all_pos_res.get("result", []) if isinstance(all_pos_res, dict) else (all_pos_res if isinstance(all_pos_res, list) else [])
+                    # Match current product_id first, or any active position
+                    for p in positions_list:
+                        if int(p.get("size") or 0) != 0:
+                            if p.get("product_id") == self.product_id or m_pos is None:
+                                m_pos = p
+                                if p.get("product_id") == self.product_id:
+                                    break
+                except Exception as e_pos:
+                    logger.debug(f"Could not fetch /v2/positions/margined: {e_pos}")
+
+                # Fallback to single product lookup
+                if not m_pos:
+                    try:
+                        m_pos = self.auth_client.get_margined_position(self.product_id)
+                    except Exception:
+                        pass
+
                 if isinstance(m_pos, dict) and m_pos.get("size"):
                     raw_size = int(m_pos["size"])
                     if raw_size != 0:
+                        pos_sym = m_pos.get("product_symbol") or self.symbol
                         side = "BUY" if raw_size > 0 else "SELL"
                         entry = float(m_pos.get("entry_price") or 0.0)
                         liq = float(m_pos.get("liquidation_price") or 0.0)
                         margin_usd = float(m_pos.get("margin") or 0.0)
                         
                         # Live mark-to-market PnL
-                        ticker = self.fetch_live_ticker()
+                        ticker = self.fetch_live_ticker(pos_sym)
                         mark = float(ticker.get("mark_price") or entry)
                         
                         if side == "BUY":
@@ -442,7 +484,8 @@ class DeltaExchangeManager:
                             tp_price = round(entry * (1.0055 if side == "BUY" else 0.9945), 4)
                         
                         pos_dict = {
-                            "symbol": self.symbol,
+                            "symbol": pos_sym,
+                            "product_id": m_pos.get("product_id", self.product_id),
                             "side": side,
                             "contracts": abs(raw_size),
                             "entry_price": round(entry, 4),
@@ -488,18 +531,19 @@ class DeltaExchangeManager:
             contracts = pos["contracts"]
             side = pos["side"]
             exit_side = "sell" if side == "BUY" else "buy"
+            target_pid = pos.get("product_id", self.product_id)
 
             # 1. Cancel pending stop/take profit orders to prevent orphan execution
             try:
-                self.auth_client.cancel_all_orders({'product_id': self.product_id})
-                logger.info(f"Cancelled all pending orders for product {self.product_id}")
+                self.auth_client.cancel_all_orders({'product_id': target_pid})
+                logger.info(f"Cancelled all pending orders for product {target_pid}")
             except Exception as e:
                 logger.warning(f"Error cancelling pending orders: {e}")
 
             # 2. Place market close order
             try:
                 close_res = self.auth_client.place_order(
-                    product_id=self.product_id,
+                    product_id=target_pid,
                     size=int(contracts),
                     side=exit_side,
                     order_type=OrderType.MARKET,

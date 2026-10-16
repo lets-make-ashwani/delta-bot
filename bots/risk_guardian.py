@@ -92,10 +92,11 @@ class RiskGuardianBot(BaseBot):
         if available_margin_inr < 10.0:
             return {"approved": False, "reason": f"Insufficient margin reserve (₹{available_margin_inr:.2f} < ₹10.0)."}
 
-        # Dynamic sizing: uses MARGIN_RATIO_PER_TRADE (10%) of actual available demo margin
+        # Dynamic sizing: uses MARGIN_RATIO_PER_TRADE of actual available demo margin
         allocated_margin_inr = available_margin_inr * config.MARGIN_RATIO_PER_TRADE
         margin_usd = allocated_margin_inr / config.USD_INR_RATE
-        notional_usd = margin_usd * config.LEVERAGE
+        active_leverage = state.get("leverage") or getattr(config, "LEVERAGE", 100)
+        notional_usd = margin_usd * active_leverage
 
         entry_price = proposed_signal.entry_price or (ob.get("best_bid") if proposed_signal.action == "BUY" else ob.get("best_ask"))
         if not entry_price or entry_price <= 0:
@@ -104,6 +105,12 @@ class RiskGuardianBot(BaseBot):
         # Dynamic sizing for any contract: BTC, ETH, SOL, XRP
         contract_value = float(state.get("contract_value") or 1.0)
         contracts = int(notional_usd / (entry_price * contract_value))
+
+        # Check if 1 minimum contract would exceed remaining margin
+        min_cost_inr = (1 * contract_value * entry_price * config.USD_INR_RATE) / active_leverage
+        if min_cost_inr > available_margin_inr:
+            return {"approved": False, "reason": f"Available margin ₹{available_margin_inr:.2f} too low for 1 contract of {state.get('symbol', 'asset')} (requires ₹{min_cost_inr:.2f})."}
+
         contracts = max(1, min(contracts, config.MAX_CONTRACTS_PER_TRADE))
 
         # 4. Bracket Levels (SL & TP)
