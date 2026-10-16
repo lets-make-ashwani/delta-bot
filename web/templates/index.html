@@ -2,73 +2,96 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Delta Quant Swarm | 100x AI Scalper Dashboard</title>
   <link rel="stylesheet" href="/static/css/style.css">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22><text y=%2226%22 font-size=%2226%22>⚡</text></svg>">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
 </head>
 <body>
 
   <!-- Top Navigation Bar -->
   <nav class="navbar">
-    <div class="logo-group">
-      <div class="logo-icon">⚡</div>
-      <div class="logo-text">
-        <h1>DELTA QUANT DESK</h1>
-        <span>AI Multi-Agent Swarm • 100x Scalper</span>
+    <div class="navbar-top-row">
+      <div class="logo-group">
+        <div class="logo-icon">⚡</div>
+        <div class="logo-text">
+          <h1>DELTA QUANT DESK</h1>
+          <span>AI Multi-Agent Swarm • 100x Scalper</span>
+        </div>
+      </div>
+
+      <!-- Live Mode & Leverage Badges -->
+      <div class="nav-status-group">
+        <div class="badge badge-live">
+          <span class="pulse-dot"></span>
+          <span id="nav-mode">DEMO ONLINE</span>
+        </div>
+        <div class="badge badge-leverage">
+          <span>⚡ 100x LEVERAGE</span>
+        </div>
       </div>
     </div>
 
-    <!-- Active Symbol Switcher -->
-    <div class="symbol-selector">
-      <button class="sym-btn active" data-symbol="XRP">XRP</button>
-      <button class="sym-btn" data-symbol="BTC">BTC</button>
-      <button class="sym-btn" data-symbol="ETH">ETH</button>
-      <button class="sym-btn" data-symbol="SOL">SOL</button>
-    </div>
-
-    <!-- Demo Fund Allocation Selector -->
-    <div style="display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.04); padding: 4px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
-      <span style="font-size: 0.75rem; color: var(--text-dim); font-weight: 600;">Fund Allocation:</span>
-      <div class="fund-btn-group" style="display: flex; gap: 3px;">
-        <button class="ratio-btn active" data-ratio="0.25">25%</button>
-        <button class="ratio-btn" data-ratio="0.50">50%</button>
-        <button class="ratio-btn" data-ratio="0.75">75%</button>
-        <button class="ratio-btn" data-ratio="1.00">100% Full</button>
+    <!-- Controls Row: Symbol, Fund Allocation & Quick Actions -->
+    <div class="navbar-controls-row">
+      <!-- Active Symbol Switcher -->
+      <div class="symbol-selector" id="symbol-buttons-bar">
+        <button class="sym-btn active" data-symbol="XRP">XRP</button>
+        <button class="sym-btn" data-symbol="BTC">BTC</button>
+        <button class="sym-btn" data-symbol="ETH">ETH</button>
+        <button class="sym-btn" data-symbol="SOL">SOL</button>
       </div>
-    </div>
 
-    <!-- Connection & Status Badges -->
-    <div class="nav-actions">
-      <button id="btn-toggle-auto" class="badge" style="background: rgba(34,197,94,0.18); color: var(--green); cursor: pointer; border: 1px solid var(--green); font-weight: 700; transition: all 0.2s;">
-        🤖 AUTO-PILOT: ACTIVE
-      </button>
-      <button id="btn-test-scalp" class="badge" style="background: linear-gradient(135deg, var(--cyan), var(--purple)); color: #fff; cursor: pointer; border: none; font-weight: 700;">
-        ⚡ Force Test Scalp
-      </button>
-      <button id="btn-close-pos" class="badge" style="background: rgba(244,63,94,0.2); color: var(--red); cursor: pointer; border: 1px solid var(--red); display: none;">
-        🛑 Close Position
-      </button>
-      <div class="badge badge-live">
-        <span class="pulse-dot"></span>
-        <span id="nav-mode">DEMO ONLINE</span>
+      <!-- Demo Fund Allocation Selector -->
+      <div class="fund-allocation-box">
+        <span class="fund-label">Margin Fund:</span>
+        <div class="fund-btn-group">
+          <button class="ratio-btn active" data-ratio="0.25">25%</button>
+          <button class="ratio-btn" data-ratio="0.50">50%</button>
+          <button class="ratio-btn" data-ratio="0.75">75%</button>
+          <button class="ratio-btn" data-ratio="1.00">100% Full</button>
+        </div>
       </div>
-      <div class="badge badge-leverage">
-        <span>⚡ 100x LEVERAGE</span>
+
+      <!-- Action Buttons -->
+      <div class="nav-actions">
+        <button id="btn-toggle-auto" class="badge btn-action btn-auto">
+          🤖 AUTO-PILOT: ACTIVE
+        </button>
+        <button id="btn-test-scalp" class="badge btn-action btn-force-scalp">
+          ⚡ Force Test Scalp
+        </button>
+        <button id="btn-close-pos" class="badge btn-action btn-close-pos" style="display: none;">
+          🛑 Close Position
+        </button>
       </div>
     </div>
   </nav>
 
+  <!-- Mobile Quick Jump Bar (Visible only on mobile devices) -->
+  <div class="mobile-nav-pills-bar">
+    <div class="mobile-pills-scroll">
+      <a href="#sec-radar" class="mobile-pill active">📡 Radar</a>
+      <a href="#sec-ai" class="mobile-pill">🧠 AI Brain</a>
+      <a href="#sec-position" class="mobile-pill">🎯 Position</a>
+      <a href="#sec-swarm" class="mobile-pill">🤖 Swarm</a>
+      <a href="#sec-learning" class="mobile-pill">🧬 Learning</a>
+      <a href="#sec-trades" class="mobile-pill">💰 Ledger</a>
+      <a href="#sec-news" class="mobile-pill">📰 News</a>
+      <a href="#sec-terminal" class="mobile-pill">💻 Terminal</a>
+    </div>
+  </div>
+
   <!-- Notice Banner for IP Whitelisting (Hidden unless IP restriction is detected) -->
-  <div id="ip-alert-banner" style="display: none; background: rgba(245, 158, 11, 0.15); border: 1px solid #f59e0b; color: #fbbf24; padding: 10px 24px; text-align: center; font-size: 0.88rem; margin: 10px auto; max-width: 1400px; border-radius: 8px;">
-    ⚠️ <strong>Delta Demo API Whitelist Notice:</strong> Your current IP (<code id="client-ip-text" style="color: #fff; background: rgba(0,0,0,0.4); padding: 2px 6px; border-radius: 4px;">152.58.184.141</code>) is not whitelisted on your Delta API key. Please open <a href="https://demo.delta.exchange" target="_blank" style="color: #67e8f9; text-decoration: underline;">demo.delta.exchange</a> &gt; API Keys, edit your key and <strong>leave IP restriction blank</strong> (or add this IP) to allow live order execution.
+  <div id="ip-alert-banner" class="alert-banner" style="display: none;">
+    ⚠️ <strong>Delta Demo API Whitelist Notice:</strong> Your current IP (<code id="client-ip-text">152.58.184.141</code>) is not whitelisted on your Delta API key. Please open <a href="https://demo.delta.exchange" target="_blank">demo.delta.exchange</a> &gt; API Keys, edit your key and <strong>leave IP restriction blank</strong> to allow live order execution.
   </div>
 
   <!-- Main Container -->
   <main class="dashboard-container">
 
     <!-- KPI Ribbon -->
-    <section class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));">
+    <section class="kpi-grid">
       <div class="glass-card kpi-card">
         <span class="kpi-label">Mark Price (<span id="kpi-symbol">XRPUSD</span>)</span>
         <span class="kpi-value mono" id="kpi-price">$1.3720</span>
@@ -77,50 +100,50 @@
 
       <div class="glass-card kpi-card">
         <span class="kpi-label">Demo Wallet Balance</span>
-        <span class="kpi-value mono" id="kpi-balance">₹68,975.30</span>
-        <span class="kpi-sub">Avail Margin: <span id="kpi-avail-margin" class="mono">₹23,079.61</span></span>
+        <span class="kpi-value mono" id="kpi-balance">₹4,155.24</span>
+        <span class="kpi-sub">Avail Margin: <span id="kpi-avail-margin" class="mono">₹4,133.32</span></span>
       </div>
 
       <div class="glass-card kpi-card">
         <span class="kpi-label">Cumulative Realized P&L</span>
-        <span class="kpi-value mono" id="kpi-realized-pnl" style="color: var(--green); font-size: 1.35rem;">+₹10,608.36</span>
-        <span class="kpi-sub">Win Rate: <span id="kpi-win-rate" class="mono" style="color: var(--green);">75.0% (3W / 1L)</span></span>
+        <span class="kpi-value mono pnl-highlight" id="kpi-realized-pnl">+₹0.00</span>
+        <span class="kpi-sub">Win Rate: <span id="kpi-win-rate" class="mono">0.0% (0W / 0L)</span></span>
       </div>
 
       <div class="glass-card kpi-card">
         <span class="kpi-label">Market Regime</span>
-        <span class="kpi-value" id="kpi-regime" style="color: var(--purple); font-size: 1.25rem;">RANGING_CHOP</span>
+        <span class="kpi-value regime-text" id="kpi-regime">RANGING_CHOP</span>
         <span class="kpi-sub">Profile: <span id="kpi-profile">RANGE_HARVESTER</span></span>
       </div>
 
-      <div class="glass-card kpi-card">
+      <div class="glass-card kpi-card kpi-span-mobile">
         <span class="kpi-label">News Sentiment Index</span>
-        <span class="kpi-value" id="kpi-sentiment-label" style="color: var(--cyan); font-size: 1.25rem;">BULLISH</span>
+        <span class="kpi-value sentiment-text" id="kpi-sentiment-label">BULLISH</span>
         <span class="kpi-sub">Score: <span id="kpi-sentiment-score" class="mono">+0.35</span> / 1.0</span>
       </div>
     </section>
 
     <!-- Multi-Asset Quant Radar Section (BTC • ETH • SOL • XRP) -->
-    <section class="glass-card radar-section" style="margin-bottom: 20px; padding: 18px 22px; border: 1px solid rgba(0, 242, 254, 0.25); background: linear-gradient(135deg, rgba(15, 23, 42, 0.88), rgba(10, 15, 29, 0.95)); box-shadow: 0 8px 32px rgba(0,0,0,0.45); border-radius: 14px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
-        <div style="display: flex; align-items: center; gap: 10px;">
-          <span style="font-size: 1.35rem;">📡</span>
+    <section class="glass-card radar-section" id="sec-radar">
+      <div class="radar-header">
+        <div class="radar-title-box">
+          <span class="radar-icon">📡</span>
           <div>
-            <h2 style="font-size: 1.05rem; font-weight: 700; letter-spacing: 0.05em; margin: 0; color: #fff; display: flex; align-items: center; gap: 8px;">
+            <h2 class="radar-heading">
               MULTI-ASSET QUANT RADAR
-              <span class="badge" style="background: rgba(0,242,254,0.15); color: var(--cyan); border: 1px solid var(--cyan); font-size: 0.65rem;">AUTONOMOUS CROSS-MARKET SCANNER</span>
+              <span class="badge badge-radar-tag">AUTONOMOUS CROSS-MARKET SCANNER</span>
             </h2>
-            <span style="font-size: 0.76rem; color: var(--text-dim);">Live real-time quantitative ranking across BTC, ETH, SOL, &amp; XRP perpetuals</span>
+            <span class="radar-subtitle">Live real-time quantitative ranking across BTC, ETH, SOL, &amp; XRP perpetuals</span>
           </div>
         </div>
-        <div id="radar-top-pick-badge" style="display: flex; align-items: center; gap: 8px; background: rgba(34,197,94,0.12); border: 1px solid var(--green); padding: 5px 14px; border-radius: 20px;">
-          <span class="pulse-dot" style="background: var(--green);"></span>
-          <span style="font-size: 0.8rem; font-weight: 700; color: var(--green);">ACTIVE TARGET: <span id="radar-top-coin">XRP</span> (<span id="radar-top-action">BUY</span>)</span>
+        <div id="radar-top-pick-badge" class="radar-top-badge">
+          <span class="pulse-dot pulse-green"></span>
+          <span>ACTIVE TARGET: <strong id="radar-top-coin">XRP</strong> (<strong id="radar-top-action">BUY</strong>)</span>
         </div>
       </div>
 
       <!-- 4-Card Asset Grid -->
-      <div id="radar-cards-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px;">
+      <div id="radar-cards-grid" class="radar-cards-grid">
         <!-- Populated dynamically via app.js -->
       </div>
     </section>
@@ -132,21 +155,21 @@
       <div class="col-left">
 
         <!-- Jarvis AI ("Jev AI") Executive Brain -->
-        <div class="glass-card ai-card">
+        <div class="glass-card ai-card" id="sec-ai">
           <div class="section-header">
-            <div class="section-title" style="display: flex; align-items: center; gap: 8px;">
+            <div class="section-title">
               <span>🧠</span> JARVIS AI QUANTITATIVE BRAIN ("Jev AI")
-              <span id="ai-engine-badge" class="badge" style="font-size: 0.68rem; background: rgba(0,242,254,0.12); color: var(--cyan); border: 1px solid rgba(0,242,254,0.3);">Quant Matrix Engine</span>
+              <span id="ai-engine-badge" class="badge badge-engine">Quant Matrix Engine</span>
             </div>
             <div id="ai-verdict-badge" class="verdict-tag verdict-neutral">
               NEUTRAL_HOLD
             </div>
           </div>
 
-          <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--text-muted);">
-            <span>Bearish Pressure (-100)</span>
-            <span>Neural Score: <strong id="ai-score-val" class="mono" style="color: #fff;">0</strong> / 100</span>
-            <span>Bullish Pressure (+100)</span>
+          <div class="ai-score-meta">
+            <span>Bearish (-100)</span>
+            <span>Neural Score: <strong id="ai-score-val" class="mono">0</strong> / 100</span>
+            <span>Bullish (+100)</span>
           </div>
 
           <div class="ai-score-bar-container">
@@ -159,86 +182,88 @@
         </div>
 
         <!-- Active 100x Position Card -->
-        <div class="glass-card" id="position-card">
+        <div class="glass-card" id="sec-position">
           <div class="section-header">
             <div class="section-title">
               <span>🎯</span> ACTIVE 100x SCALP POSITION
             </div>
-            <span id="pos-status-badge" class="badge" style="background: rgba(255,255,255,0.06); color: var(--text-dim);">STANDBY</span>
+            <span id="pos-status-badge" class="badge badge-standby">STANDBY</span>
           </div>
 
           <!-- When Position is Active -->
           <div id="pos-active-body" style="display: none;">
-            <div style="display: flex; justify-content: space-between; align-items: baseline;">
-              <div>
-                <span id="pos-side" class="badge" style="font-size: 1rem; padding: 6px 14px;">BUY</span>
-                <span id="pos-size-text" class="mono" style="font-size: 1.2rem; font-weight: 700; margin-left: 10px;">15 Contracts</span>
+            <div class="pos-top-row">
+              <div class="pos-side-box">
+                <span id="pos-side" class="badge pos-side-badge">BUY</span>
+                <span id="pos-size-text" class="mono pos-size-text">15 Contracts</span>
               </div>
-              <div>
-                <span style="font-size: 0.8rem; color: var(--text-dim);">Unrealized PnL:</span>
-                <span id="pos-pnl" class="mono" style="font-size: 1.5rem; font-weight: 800; margin-left: 6px; color: var(--green);">+₹0.00</span>
-                <span id="pos-roi" class="mono" style="font-size: 0.95rem; font-weight: 600; color: var(--green);">(+0.0%)</span>
+              <div class="pos-pnl-box">
+                <span class="pos-pnl-label">Unrealized PnL:</span>
+                <span id="pos-pnl" class="mono pos-pnl-value">+₹0.00</span>
+                <span id="pos-roi" class="mono pos-roi-value">(+0.0%)</span>
               </div>
             </div>
 
             <div class="pos-details-grid mono">
-              <div>
+              <div class="pos-detail-cell">
                 <div class="pos-item-label">Entry Price</div>
                 <div class="pos-item-val" id="pos-entry">$1.3680</div>
               </div>
-              <div>
+              <div class="pos-detail-cell">
                 <div class="pos-item-label">Hard Stop-Loss</div>
-                <div class="pos-item-val" id="pos-sl" style="color: var(--red);">$1.3650</div>
+                <div class="pos-item-val text-red" id="pos-sl">$1.3650</div>
               </div>
-              <div>
+              <div class="pos-detail-cell">
                 <div class="pos-item-label">Take-Profit Target</div>
-                <div class="pos-item-val" id="pos-tp" style="color: var(--green);">$1.3742</div>
+                <div class="pos-item-val text-green" id="pos-tp">$1.3742</div>
               </div>
-              <div>
+              <div class="pos-detail-cell">
                 <div class="pos-item-label">Liquidation Buffer</div>
-                <div class="pos-item-val" id="pos-liq" style="color: #ff758f;">$1.3591</div>
+                <div class="pos-item-val text-liq" id="pos-liq">$1.3591</div>
               </div>
             </div>
 
             <!-- Dynamic Adaptive Bracket Adjustment Indicator -->
-            <div id="pos-adaptive-box" style="display: none; margin-top: 14px; background: rgba(0, 242, 254, 0.08); border: 1px solid rgba(0, 242, 254, 0.25); border-radius: 8px; padding: 8px 14px; font-size: 0.82rem; color: var(--cyan); display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 1rem;">⚡</span>
+            <div id="pos-adaptive-box" class="pos-adaptive-box" style="display: none;">
+              <span class="adaptive-icon">⚡</span>
               <div>
-                <strong style="color: #67e8f9;">Adaptive Auto-Tuner:</strong>
-                <span id="pos-adaptive-text" style="color: #f1f5f9; margin-left: 4px;">Dynamic Breakeven & Trailing Stop Active</span>
+                <strong class="adaptive-title">Adaptive Auto-Tuner:</strong>
+                <span id="pos-adaptive-text" class="adaptive-desc">Dynamic Breakeven &amp; Trailing Stop Active</span>
               </div>
             </div>
           </div>
 
           <!-- When No Position Active -->
           <div id="pos-idle-body" class="pos-none">
-            <p style="font-size: 1rem; color: var(--text-muted); margin-bottom: 4px;">⚡ No Active Position</p>
-            <p style="font-size: 0.82rem;">Bots are actively monitoring order flow & liquidity sweeps for high-probability sniper entry.</p>
+            <p class="idle-title">⚡ No Active Position</p>
+            <p class="idle-desc">Bots are actively monitoring order flow &amp; liquidity sweeps for high-probability sniper entry.</p>
           </div>
         </div>
 
         <!-- Bot Swarm Deliberation Matrix -->
-        <div class="glass-card">
+        <div class="glass-card" id="sec-swarm">
           <div class="section-header">
             <div class="section-title">
               <span>🤖</span> BOT SWARM DELIBERATION MATRIX
             </div>
-            <span style="font-size: 0.75rem; color: var(--text-dim);">Real-Time Consensus</span>
+            <span class="section-sub-tag">Real-Time Consensus</span>
           </div>
 
-          <table class="swarm-table">
-            <thead>
-              <tr>
-                <th>Bot Agent</th>
-                <th>Vote</th>
-                <th>Confidence</th>
-                <th>Operational Rationale</th>
-              </tr>
-            </thead>
-            <tbody id="swarm-tbody">
-              <!-- Dynamically populated by app.js -->
-            </tbody>
-          </table>
+          <div class="table-scroll-wrapper">
+            <table class="swarm-table">
+              <thead>
+                <tr>
+                  <th>Bot Agent</th>
+                  <th>Vote</th>
+                  <th>Confidence</th>
+                  <th>Operational Rationale</th>
+                </tr>
+              </thead>
+              <tbody id="swarm-tbody">
+                <!-- Dynamically populated by app.js -->
+              </tbody>
+            </table>
+          </div>
         </div>
 
       </div>
@@ -247,72 +272,56 @@
       <div class="col-right">
 
         <!-- Self-Improving Neural Brain & Reinforcement Learning Panel -->
-        <div class="glass-card" style="border-left: 3px solid var(--purple);">
+        <div class="glass-card card-learning" id="sec-learning">
           <div class="section-header">
             <div class="section-title">
               <span>🧬</span> SELF-IMPROVING NEURAL BRAIN
             </div>
-            <span class="badge" id="learning-trade-count" style="background: rgba(168,85,247,0.18); color: var(--purple);">0 Trades Trained</span>
+            <span class="badge badge-purple" id="learning-trade-count">0 Trades Trained</span>
           </div>
 
-          <div style="font-size: 0.8rem; margin-bottom: 10px; color: var(--text-dim); display: flex; justify-content: space-between;">
+          <div class="learning-stats-row">
             <span>Reinforcement Bot Weights:</span>
-            <span>Win Rate: <strong id="learning-win-rate" class="mono" style="color: var(--green);">0.0%</strong></span>
+            <span>Win Rate: <strong id="learning-win-rate" class="mono text-green">0.0%</strong></span>
           </div>
-          <div id="learning-weights-grid" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px;">
+          <div id="learning-weights-grid" class="learning-weights-grid">
             <!-- Populated by app.js -->
           </div>
 
-          <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 10px 14px;">
-            <div style="font-size: 0.72rem; text-transform: uppercase; color: var(--cyan); font-weight: 700; margin-bottom: 4px;">
+          <div class="learning-lesson-box">
+            <div class="lesson-header">
               💡 Groq AI Post-Mortem Lesson from Real Trades:
             </div>
-            <div id="learning-latest-lesson" style="font-size: 0.82rem; color: #e2e8f0; line-height: 1.4;">
+            <div id="learning-latest-lesson" class="lesson-text">
               Accumulating live market trade experience...
             </div>
           </div>
         </div>
 
-        <!-- Live Crypto News & Catalysts -->
-        <div class="glass-card">
-          <div class="section-header">
-            <div class="section-title">
-              <span>📰</span> LIVE CRYPTO NEWS & SENTIMENT
-            </div>
-            <span class="badge" id="news-badge-count" style="background: rgba(0,242,254,0.1); color: var(--cyan);">6 Articles</span>
-          </div>
-
-          <div id="news-container">
-            <div style="color: var(--text-dim); font-size: 0.85rem; text-align: center; padding: 20px;">
-              Loading live news feeds...
-            </div>
-          </div>
-        </div>
-
         <!-- Realized Profit & Loss Closed Trades Ledger -->
-        <div class="glass-card">
+        <div class="glass-card" id="sec-trades">
           <div class="section-header">
             <div class="section-title">
-              <span>💰</span> REALIZED PROFIT & LOSS LEDGER
+              <span>💰</span> REALIZED PROFIT &amp; LOSS LEDGER
             </div>
-            <span class="badge" id="trade-count-badge" style="background: rgba(34,197,94,0.15); color: var(--green);">0 Trades</span>
+            <span class="badge badge-green" id="trade-count-badge">0 Trades</span>
           </div>
 
-          <div style="max-height: 230px; overflow-y: auto;">
-            <table class="swarm-table" style="font-size: 0.8rem;">
+          <div class="table-scroll-wrapper ledger-scroll-box">
+            <table class="swarm-table ledger-table">
               <thead>
                 <tr>
                   <th>Time</th>
                   <th>Side</th>
                   <th>Contracts</th>
                   <th>Exit Price</th>
-                  <th>Realized P&L</th>
+                  <th>Realized P&amp;L</th>
                   <th>Reason</th>
                 </tr>
               </thead>
               <tbody id="trades-tbody">
                 <tr>
-                  <td colspan="6" style="text-align: center; color: var(--text-dim); padding: 15px;">
+                  <td colspan="6" class="trades-empty-cell">
                     No closed trades yet. Bots are actively hunting setups...
                   </td>
                 </tr>
@@ -321,13 +330,29 @@
           </div>
         </div>
 
+        <!-- Live Crypto News & Catalysts -->
+        <div class="glass-card" id="sec-news">
+          <div class="section-header">
+            <div class="section-title">
+              <span>📰</span> LIVE CRYPTO NEWS &amp; SENTIMENT
+            </div>
+            <span class="badge badge-cyan" id="news-badge-count">6 Articles</span>
+          </div>
+
+          <div id="news-container">
+            <div class="news-loading-text">
+              Loading live news feeds...
+            </div>
+          </div>
+        </div>
+
         <!-- Swarm Live Event Logs -->
-        <div class="glass-card">
+        <div class="glass-card" id="sec-terminal">
           <div class="section-header">
             <div class="section-title">
               <span>📡</span> SWARM LIVE TERMINAL
             </div>
-            <span class="mono" style="font-size: 0.72rem; color: var(--text-dim);" id="clock-display">00:00:00</span>
+            <span class="mono terminal-clock" id="clock-display">00:00:00</span>
           </div>
 
           <div class="console-box" id="console-stream">

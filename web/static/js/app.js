@@ -11,9 +11,40 @@ document.addEventListener("DOMContentLoaded", () => {
   initSymbolButtons();
   initActionButtons();
   initFundRatioButtons();
+  initMobileNavigation();
   startClock();
   startPolling();
 });
+
+function initMobileNavigation() {
+  const pills = document.querySelectorAll(".mobile-pill");
+  pills.forEach(pill => {
+    pill.addEventListener("click", (e) => {
+      pills.forEach(p => p.classList.remove("active"));
+      pill.classList.add("active");
+    });
+  });
+
+  // Track scroll position to update active pill
+  window.addEventListener("scroll", () => {
+    const sections = ["sec-radar", "sec-ai", "sec-position", "sec-swarm", "sec-learning", "sec-trades", "sec-news", "sec-terminal"];
+    const scrollPos = window.scrollY + 140;
+
+    for (let i = sections.length - 1; i >= 0; i--) {
+      const el = document.getElementById(sections[i]);
+      if (el && el.offsetTop <= scrollPos) {
+        pills.forEach(p => {
+          if (p.getAttribute("href") === `#${sections[i]}`) {
+            p.classList.add("active");
+          } else {
+            p.classList.remove("active");
+          }
+        });
+        break;
+      }
+    }
+  }, { passive: true });
+}
 
 function initActionButtons() {
   // 1. Force Test Scalp
