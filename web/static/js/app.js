@@ -69,26 +69,35 @@ function initActionButtons() {
     });
   }
 
-  // 2. Manual Close Position
+  // 2. Manual Close Position (Global Handler)
+  window.closePosition = async function(productId = null, symbol = null) {
+    try {
+      const payload = {};
+      if (productId) payload.product_id = parseInt(productId);
+      if (symbol) payload.symbol = symbol;
+
+      addLog(`🛑 Requesting market close${symbol ? ` for ${symbol}` : ''}...`, "warn");
+      const res = await fetch("/api/close_position", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (data.success) {
+        addLog(`✅ Successfully closed position${symbol ? ` on ${symbol}` : ''}!`, "trade");
+      } else {
+        addLog(`⚠️ Close notice: ${data.reason || data.error}`, "warn");
+      }
+    } catch (err) {
+      addLog(`❌ Error closing position: ${err}`, "warn");
+    } finally {
+      pollStatus();
+    }
+  };
+
   const btnClose = document.getElementById("btn-close-pos");
   if (btnClose) {
-    btnClose.addEventListener("click", async () => {
-      btnClose.innerText = "⏳ Closing...";
-      try {
-        const res = await fetch("/api/close_position", { method: "POST" });
-        const data = await res.json();
-        if (data.success) {
-          addLog("🛑 Position manually closed at market price.", "warn");
-        } else {
-          addLog(`⚠️ Close notice: ${data.reason || data.error}`, "warn");
-        }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        btnClose.innerText = "🛑 Close Position";
-        pollStatus();
-      }
-    });
+    btnClose.addEventListener("click", () => window.closePosition());
   }
 
   // 3. Auto-Pilot Toggle
@@ -302,105 +311,11 @@ function renderDashboard(data) {
     aiEngineBadge.innerText = jarvis.powered_by || "Quant Matrix Engine";
   }
 
-  // 3. Active 100x Position Card
-  const posCard = document.getElementById("sec-position") || document.getElementById("position-card");
-  const activeBody = document.getElementById("pos-active-body");
-  const idleBody = document.getElementById("pos-idle-body");
-  const posBadge = document.getElementById("pos-status-badge");
-
-  if (pos && (pos.contracts > 0 || (pos.size && parseInt(pos.size) !== 0))) {
-    if (posCard) posCard.classList.add("pos-active");
-    if (activeBody) activeBody.style.display = "block";
-    if (idleBody) idleBody.style.display = "none";
-
-    if (posBadge) {
-      posBadge.innerText = "OPEN IN MARKET";
-      posBadge.className = "badge badge-live";
-    }
-
-    const coinEl = document.getElementById("pos-coin");
-    if (coinEl) {
-      coinEl.innerText = (pos.symbol || state.symbol || "BTCUSD").toUpperCase();
-    }
-
-    const sideEl = document.getElementById("pos-side");
-    if (sideEl) {
-      sideEl.innerText = pos.side || "BUY";
-      sideEl.className = `badge ${(pos.side || 'BUY') === 'BUY' ? 'vote-buy' : 'vote-sell'}`;
-    }
-
-    const contractsCount = pos.contracts || pos.size || 0;
-    const marginAmount = pos.margin_inr !== undefined ? pos.margin_inr : 0.0;
-    const sizeTextEl = document.getElementById("pos-size-text");
-    if (sizeTextEl) {
-      sizeTextEl.innerText = `${contractsCount.toLocaleString()} Contracts (Margin: ₹${marginAmount.toFixed(2)})`;
-    }
-    
-    const pnl = pos.unrealized_pnl_inr || 0.0;
-    const roi = marginAmount > 0 ? (pnl / marginAmount) * 100 : 0.0;
-    
-    const posPnlEl = document.getElementById("pos-pnl");
-    const posRoiEl = document.getElementById("pos-roi");
-    const pColor = pnl >= 0 ? "var(--green)" : "var(--red)";
-    
-    if (posPnlEl) {
-      posPnlEl.innerText = `${pnl >= 0 ? '+' : ''}₹${pnl.toFixed(2)}`;
-      posPnlEl.style.color = pColor;
-    }
-    if (posRoiEl) {
-      posRoiEl.innerText = `(${roi >= 0 ? '+' : ''}${roi.toFixed(1)}%)`;
-      posRoiEl.style.color = pColor;
-    }
-
-    const entryEl = document.getElementById("pos-entry");
-    if (entryEl) entryEl.innerText = `$${(pos.entry_price || 0).toFixed(4)}`;
-    const slEl = document.getElementById("pos-sl");
-    if (slEl) slEl.innerText = `$${(pos.stop_loss || 0).toFixed(4)}`;
-    const tpEl = document.getElementById("pos-tp");
-    if (tpEl) tpEl.innerText = `$${(pos.take_profit || 0).toFixed(4)}`;
-    const liqEl = document.getElementById("pos-liq");
-    if (liqEl) liqEl.innerText = `$${(pos.liquidation_price || 0).toFixed(4)}`;
-
-    const btnTest = document.getElementById("btn-test-scalp");
-    const btnClose = document.getElementById("btn-close-pos");
-    if (btnTest) btnTest.style.display = "none";
-    if (btnClose) btnClose.style.display = "inline-flex";
-
-    // Adaptive Bracket Tuning Display
-    const adaptiveBox = document.getElementById("pos-adaptive-box");
-    const adaptiveText = document.getElementById("pos-adaptive-text");
-    const adjs = (data.adaptive_adjustments && data.adaptive_adjustments.length > 0) 
-      ? data.adaptive_adjustments 
-      : (pos.adaptive_adjustments || []);
-
-    if (adaptiveBox && adaptiveText) {
-      adaptiveBox.style.display = "flex";
-      if (adjs.length > 0) {
-        adaptiveText.innerText = adjs[adjs.length - 1];
-      } else {
-        adaptiveText.innerText = "Dynamic Trailing Stop & Orderbook Wall Front-Running Active";
-      }
-    }
-
-  } else {
-    if (posCard) posCard.classList.remove("pos-active");
-    if (activeBody) activeBody.style.display = "none";
-    if (idleBody) idleBody.style.display = "block";
-
-    const adaptiveBox = document.getElementById("pos-adaptive-box");
-    if (adaptiveBox) adaptiveBox.style.display = "none";
-
-    if (posBadge) {
-      posBadge.innerText = isAutoPilot ? "AUTONOMOUS SCANNING" : "AUTO-PILOT PAUSED";
-      posBadge.className = "badge";
-      posBadge.style.background = isAutoPilot ? "rgba(0, 242, 254, 0.15)" : "rgba(255,255,255,0.06)";
-      posBadge.style.color = isAutoPilot ? "var(--cyan)" : "var(--text-dim)";
-    }
-
-    const btnTest = document.getElementById("btn-test-scalp");
-    const btnClose = document.getElementById("btn-close-pos");
-    if (btnTest) btnTest.style.display = "inline-flex";
-    if (btnClose) btnClose.style.display = "none";
+  // 3. Active Positions (Renders each and every open position dynamically)
+  try {
+    renderActivePositions(data);
+  } catch (e) {
+    console.error("Error rendering active positions:", e);
   }
 
   // 3.5 Multi-Asset Quant Radar (BTC, ETH, SOL, XRP)
@@ -550,6 +465,208 @@ function renderSwarmTable(data) {
       </tr>
     `;
   }).join("");
+}
+
+function renderActivePositions(data) {
+  const posCard = document.getElementById("sec-position") || document.getElementById("position-card");
+  const cardsContainer = document.getElementById("pos-cards-container");
+  const idleBody = document.getElementById("pos-idle-body");
+  const posBadge = document.getElementById("pos-status-badge");
+  const summaryBadge = document.getElementById("pos-summary-badge");
+  const btnCloseAll = document.getElementById("btn-close-all-pos");
+  const btnCloseNav = document.getElementById("btn-close-pos");
+  const btnTestNav = document.getElementById("btn-test-scalp");
+
+  const state = data.state || {};
+  let positions = data.active_positions || state.active_positions || [];
+  if (positions.length === 0 && (state.active_position || data.active_position)) {
+    const single = state.active_position || data.active_position;
+    if (single && (single.contracts > 0 || (single.size && parseInt(single.size) !== 0))) {
+      positions = [single];
+    }
+  }
+
+  // Filter out size 0
+  positions = positions.filter(p => (p.contracts > 0 || (p.size && parseInt(p.size) !== 0)));
+
+  if (positions.length === 0) {
+    if (posCard) posCard.classList.remove("pos-active");
+    if (cardsContainer) {
+      cardsContainer.style.display = "none";
+      cardsContainer.innerHTML = "";
+    }
+    if (idleBody) idleBody.style.display = "block";
+    if (posBadge) {
+      posBadge.innerText = isAutoPilot ? "AUTONOMOUS SCANNING" : "STANDBY";
+      posBadge.className = "badge badge-standby";
+    }
+    if (summaryBadge) summaryBadge.style.display = "none";
+    if (btnCloseAll) btnCloseAll.style.display = "none";
+    if (btnCloseNav) btnCloseNav.style.display = "none";
+    if (btnTestNav) btnTestNav.style.display = "inline-flex";
+    return;
+  }
+
+  // Active Positions Exist!
+  if (posCard) posCard.classList.add("pos-active");
+  if (idleBody) idleBody.style.display = "none";
+  if (cardsContainer) cardsContainer.style.display = "flex";
+  if (btnCloseAll) btnCloseAll.style.display = positions.length > 1 ? "inline-block" : "none";
+  if (btnCloseNav) btnCloseNav.style.display = "inline-flex";
+  if (btnTestNav) btnTestNav.style.display = "none";
+
+  if (posBadge) {
+    posBadge.innerText = positions.length === 1 ? "1 OPEN IN MARKET" : `${positions.length} OPEN IN MARKET`;
+    posBadge.className = "badge badge-live";
+  }
+
+  // Summary Metrics Bar
+  const summary = data.positions_summary || {};
+  const totalMargin = summary.total_margin_inr || positions.reduce((acc, p) => acc + (p.margin_inr || 0), 0);
+  const totalPnlInr = summary.total_unrealized_pnl_inr !== undefined 
+    ? summary.total_unrealized_pnl_inr 
+    : positions.reduce((acc, p) => acc + (p.unrealized_pnl_inr || 0), 0);
+  const totalRoi = totalMargin > 0 ? (totalPnlInr / totalMargin) * 100 : 0.0;
+  const totalPnlColor = totalPnlInr >= 0 ? "var(--green)" : "var(--red)";
+
+  if (summaryBadge) {
+    summaryBadge.style.display = "inline-block";
+    summaryBadge.innerHTML = `Combined P&L: <strong style="color: ${totalPnlColor}">${totalPnlInr >= 0 ? '+' : ''}₹${totalPnlInr.toFixed(2)} (${totalRoi >= 0 ? '+' : ''}${totalRoi.toFixed(1)}%)</strong>`;
+  }
+
+  // Build each position card
+  let html = "";
+  if (positions.length > 1) {
+    html += `
+      <div class="pos-summary-bar">
+        <span><strong>Open Positions:</strong> ${positions.length} Active Coins</span>
+        <span><strong>Total Margin:</strong> ₹${totalMargin.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+        <span><strong>Total Notional:</strong> $${(summary.total_notional_usd || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} (₹${(summary.total_notional_inr || 0).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})})</span>
+        <span><strong>Total P&L:</strong> <strong style="color: ${totalPnlColor}">${totalPnlInr >= 0 ? '+' : ''}₹${totalPnlInr.toFixed(2)} (${totalRoi >= 0 ? '+' : ''}${totalRoi.toFixed(1)}%)</strong></span>
+      </div>
+    `;
+  }
+
+  html += positions.map(p => {
+    const sym = (p.symbol || state.symbol || "BTCUSD").toUpperCase();
+    const side = (p.side || "BUY").toUpperCase();
+    const isBuy = side === "BUY";
+    const sideBadgeClass = isBuy ? "vote-buy" : "vote-sell";
+    const lev = p.leverage || (sym.includes("SOL") ? 50 : 100);
+    const contracts = p.contracts || p.size || 0;
+    const marginInr = p.margin_inr || 0.0;
+    const notionalUsd = p.notional_usd || 0.0;
+    const notionalInr = p.notional_inr || (notionalUsd * 86.5);
+    const pnlInr = p.unrealized_pnl_inr || 0.0;
+    const roi = p.roi_pct !== undefined ? p.roi_pct : (marginInr > 0 ? (pnlInr / marginInr) * 100 : 0.0);
+    const pnlColor = pnlInr >= 0 ? "var(--green)" : "var(--red)";
+
+    const entry = p.entry_price || 0.0;
+    const mark = p.mark_price || entry;
+    const sl = p.stop_loss || 0.0;
+    const tp = p.take_profit || 0.0;
+    const liq = p.liquidation_price || 0.0;
+
+    // Price formatting helper
+    const fmtPrice = (val) => {
+      if (val < 2) return `$${val.toFixed(4)}`;
+      if (val < 500) return `$${val.toFixed(2)}`;
+      return `$${val.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    };
+
+    // Distances
+    const distSl = p.dist_sl_pct !== undefined ? p.dist_sl_pct : (mark > 0 ? (Math.abs(mark - sl) / mark * 100).toFixed(2) : "0.00");
+    const distTp = p.dist_tp_pct !== undefined ? p.dist_tp_pct : (mark > 0 ? (Math.abs(tp - mark) / mark * 100).toFixed(2) : "0.00");
+    const distLiq = p.dist_liq_pct !== undefined ? p.dist_liq_pct : (mark > 0 && liq > 0 ? (Math.abs(mark - liq) / mark * 100).toFixed(2) : "0.00");
+
+    // Adaptive adjustment text
+    const adjs = (p.adaptive_adjustments && p.adaptive_adjustments.length > 0)
+      ? p.adaptive_adjustments
+      : (data.adaptive_adjustments || []);
+    const adaptiveText = adjs.length > 0
+      ? adjs[adjs.length - 1]
+      : "Dynamic Trailing Stop & Orderbook Wall Front-Running Active";
+
+    return `
+      <div class="pos-single-card">
+        <div class="pos-top-row">
+          <div class="pos-side-box" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <span class="badge" style="background: rgba(0, 240, 255, 0.15); color: var(--cyan); border: 1px solid rgba(0, 240, 255, 0.45); font-weight: 800; font-size: 0.85rem; letter-spacing: 0.5px;">
+              ${sym}
+            </span>
+            <span class="badge ${sideBadgeClass}" style="font-weight: 800;">
+              ${side} ${lev}x
+            </span>
+            <span class="mono pos-size-text" style="font-size: 0.95rem;">
+              ${contracts.toLocaleString()} Contracts <span style="color: var(--text-dim); font-size: 0.80rem;">(Margin: ₹${marginInr.toFixed(2)})</span>
+            </span>
+          </div>
+
+          <div class="pos-pnl-box" style="display: flex; align-items: center; gap: 10px;">
+            <div>
+              <span class="pos-pnl-label">Unrealized PnL:</span>
+              <span class="mono pos-pnl-value" style="color: ${pnlColor};">
+                ${pnlInr >= 0 ? '+' : ''}₹${pnlInr.toFixed(2)}
+              </span>
+              <span class="mono pos-roi-value" style="color: ${pnlColor};">
+                (${roi >= 0 ? '+' : ''}${roi.toFixed(1)}%)
+              </span>
+            </div>
+            <button class="btn-close-pos-item" onclick="closePosition(${p.product_id || 'null'}, '${sym}')" title="Close this position">
+              🛑 Close
+            </button>
+          </div>
+        </div>
+
+        <div class="pos-details-grid mono">
+          <div class="pos-detail-cell">
+            <div class="pos-item-label">Entry Price</div>
+            <div class="pos-item-val">${fmtPrice(entry)}</div>
+          </div>
+          <div class="pos-detail-cell">
+            <div class="pos-item-label">Live Mark Price</div>
+            <div class="pos-item-val" style="color: var(--cyan);">${fmtPrice(mark)}</div>
+          </div>
+          <div class="pos-detail-cell">
+            <div class="pos-item-label">Hard Stop-Loss</div>
+            <div class="pos-item-val text-red">
+              ${fmtPrice(sl)} <span style="font-size: 0.70rem; color: var(--text-dim);">(${distSl}%)</span>
+            </div>
+          </div>
+          <div class="pos-detail-cell">
+            <div class="pos-item-label">Take-Profit Target</div>
+            <div class="pos-item-val text-green">
+              ${fmtPrice(tp)} <span style="font-size: 0.70rem; color: var(--text-dim);">(${distTp}%)</span>
+            </div>
+          </div>
+          <div class="pos-detail-cell">
+            <div class="pos-item-label">Liquidation Buffer</div>
+            <div class="pos-item-val text-liq">
+              ${fmtPrice(liq)} <span style="font-size: 0.70rem; color: var(--text-dim);">(${distLiq}%)</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="pos-meta-subbar mono">
+          <span>Notional Value: $${notionalUsd.toFixed(2)} USD (₹${notionalInr.toFixed(2)})</span>
+          <span>Contract Multiplier: ${p.contract_value || 1.0} ${sym.replace('USD','')}</span>
+          <span>Product ID: ${p.product_id || 'N/A'}</span>
+        </div>
+
+        <div class="pos-adaptive-box">
+          <span class="adaptive-icon">⚡</span>
+          <div>
+            <strong class="adaptive-title">Adaptive Auto-Tuner:</strong>
+            <span class="adaptive-desc">${adaptiveText}</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  if (cardsContainer) {
+    cardsContainer.innerHTML = html;
+  }
 }
 
 function renderTradesTable(trades) {

@@ -232,58 +232,23 @@
           </div>
         </div>
 
-        <!-- Active 100x Position Card -->
+        <!-- Active Scalp Positions Section (Multi-Position Live Engine) -->
         <div class="glass-card" id="sec-position">
           <div class="section-header">
             <div class="section-title">
-              <span>🎯</span> ACTIVE 100x SCALP POSITION
+              <span>🎯</span> ACTIVE OPEN POSITIONS
+              <span id="pos-summary-badge" class="badge" style="display: none; background: rgba(0,240,255,0.12); color: var(--cyan); border: 1px solid rgba(0,240,255,0.3); font-size: 0.72rem; margin-left: 8px;"></span>
             </div>
-            <span id="pos-status-badge" class="badge badge-standby">STANDBY</span>
-          </div>
-
-          <!-- When Position is Active -->
-          <div id="pos-active-body" style="display: none;">
-            <div class="pos-top-row">
-              <div class="pos-side-box">
-                <span id="pos-coin" class="badge" style="background: rgba(0, 240, 255, 0.15); color: var(--cyan); border: 1px solid rgba(0, 240, 255, 0.4); font-weight: 800; font-size: 0.82rem; margin-right: 4px; letter-spacing: 0.5px;">BTCUSD</span>
-                <span id="pos-side" class="badge pos-side-badge">BUY</span>
-                <span id="pos-size-text" class="mono pos-size-text">15 Contracts</span>
-              </div>
-              <div class="pos-pnl-box">
-                <span class="pos-pnl-label">Unrealized PnL:</span>
-                <span id="pos-pnl" class="mono pos-pnl-value">+₹0.00</span>
-                <span id="pos-roi" class="mono pos-roi-value">(+0.0%)</span>
-              </div>
-            </div>
-
-            <div class="pos-details-grid mono">
-              <div class="pos-detail-cell">
-                <div class="pos-item-label">Entry Price</div>
-                <div class="pos-item-val" id="pos-entry">$1.3680</div>
-              </div>
-              <div class="pos-detail-cell">
-                <div class="pos-item-label">Hard Stop-Loss</div>
-                <div class="pos-item-val text-red" id="pos-sl">$1.3650</div>
-              </div>
-              <div class="pos-detail-cell">
-                <div class="pos-item-label">Take-Profit Target</div>
-                <div class="pos-item-val text-green" id="pos-tp">$1.3742</div>
-              </div>
-              <div class="pos-detail-cell">
-                <div class="pos-item-label">Liquidation Buffer</div>
-                <div class="pos-item-val text-liq" id="pos-liq">$1.3591</div>
-              </div>
-            </div>
-
-            <!-- Dynamic Adaptive Bracket Adjustment Indicator -->
-            <div id="pos-adaptive-box" class="pos-adaptive-box" style="display: none;">
-              <span class="adaptive-icon">⚡</span>
-              <div>
-                <strong class="adaptive-title">Adaptive Auto-Tuner:</strong>
-                <span id="pos-adaptive-text" class="adaptive-desc">Dynamic Breakeven &amp; Trailing Stop Active</span>
-              </div>
+            <div class="pos-header-actions" style="display: flex; align-items: center; gap: 8px;">
+              <span id="pos-status-badge" class="badge badge-standby">STANDBY</span>
+              <button id="btn-close-all-pos" class="btn-close-pos-item" style="display: none;" onclick="closePosition()">
+                🛑 Close All
+              </button>
             </div>
           </div>
+
+          <!-- Dynamic Container for Each and Every Open Position -->
+          <div id="pos-cards-container" class="pos-cards-container" style="display: none;"></div>
 
           <!-- When No Position Active -->
           <div id="pos-idle-body" class="pos-none">

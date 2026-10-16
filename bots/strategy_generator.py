@@ -88,7 +88,12 @@ class StrategyGeneratorBot(BaseBot):
         entry = float(pos.get("entry_price", 0.0))
         current_sl = float(pos.get("stop_loss", 0.0))
         current_tp = float(pos.get("take_profit", 0.0))
-        mark = float(state.get("mark_price", entry))
+        pos_sym = pos.get("symbol", "")
+        # Ensure mark price is strictly for this position's coin, not another coin being scanned!
+        if pos.get("mark_price") and float(pos.get("mark_price")) > 0:
+            mark = float(pos["mark_price"])
+        else:
+            mark = float(state.get("mark_price", entry))
         
         if entry <= 0 or mark <= 0:
             return {"updated": False, "old_sl": current_sl, "new_sl": current_sl, "old_tp": current_tp, "new_tp": current_tp, "adjustments": []}
@@ -102,10 +107,11 @@ class StrategyGeneratorBot(BaseBot):
         peak_price = pos["highest_price"]
         trough_price = pos["lowest_price"]
         
-        # Rounding helper for tick size
-        tick_size = 0.0001
+        # Rounding helper for tick size per coin
+        tick_size = float(state.get("tick_size") or (0.1 if "BTC" in pos_sym else (0.01 if "ETH" in pos_sym or "SOL" in pos_sym else 0.0001)))
+        precision = 4 if tick_size < 0.01 else (2 if tick_size < 1 else 1)
         def round_tick(val: float) -> float:
-            return round(round(val / tick_size) * tick_size, 4)
+            return round(round(val / tick_size) * tick_size, precision)
 
         indicators = state.get("indicators")
         ob = state.get("orderbook", {})

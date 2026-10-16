@@ -171,11 +171,14 @@ def trigger_test_scalp():
 
 @app.route("/api/close_position", methods=["POST"])
 def close_position():
-    """Immediately closes any active scalp position at market price."""
+    """Immediately closes any active scalp position at market price (supports optional product_id or symbol)."""
     global orchestrator
     orch = get_orchestrator()
+    data = request.get_json(silent=True) or {}
+    product_id = data.get("product_id")
+    symbol = data.get("symbol")
     try:
-        res = orch.exchange.close_position(reason="MANUAL_CLOSE")
+        res = orch.exchange.close_position(product_id=product_id, symbol=symbol, reason="MANUAL_CLOSE")
         if res.get("success"):
             orch.latest_state["closed_trade"] = res.get("trade")
             return jsonify(res)

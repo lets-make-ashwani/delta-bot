@@ -234,7 +234,8 @@ class SwarmOrchestrator:
         self.iteration += 1
         
         balance_info = self.exchange.get_balance()
-        active_position = self.exchange.get_active_position()
+        active_positions = self.exchange.get_all_active_positions()
+        active_position = active_positions[0] if active_positions else None
 
         # Step 1: Scan all 4 assets concurrently for maximum responsiveness
         radar_results: Dict[str, Dict[str, Any]] = {}
@@ -273,56 +274,58 @@ class SwarmOrchestrator:
 
         # Update active position in state
         focus_state["active_position"] = active_position
+        focus_state["active_positions"] = active_positions
         focus_state["balance_info"] = balance_info
 
-        # Step 4: Dynamic Adaptive Bracket Tuning for Active Position
+        # Step 4: Dynamic Adaptive Bracket Tuning for Active Positions
         adaptive_adjustments = []
-        if active_position is not None:
-            bracket_res = self.strategy_generator.tune_active_position_brackets(active_position, focus_state)
+        for pos_item in active_positions:
+            bracket_res = self.strategy_generator.tune_active_position_brackets(pos_item, focus_state)
             if bracket_res.get("updated"):
-                adaptive_adjustments = bracket_res.get("adjustments", [])
-                active_position["adaptive_adjustments"] = adaptive_adjustments
-                logger.info(f"⚡ [ADAPTIVE BRACKETS] " + " | ".join(adaptive_adjustments))
+                adj = bracket_res.get("adjustments", [])
+                adaptive_adjustments.extend(adj)
+                pos_item["adaptive_adjustments"] = adj
+                logger.info(f"⚡ [ADAPTIVE BRACKETS: {pos_item.get('symbol')}] " + " | ".join(adj))
                 
                 # Sync updated Stop-Loss to Delta Exchange server-side orders
                 if bracket_res.get("new_sl") != bracket_res.get("old_sl") and self.exchange.mode in ["demo", "live"]:
                     self.exchange.update_stop_loss_order(
                         new_sl_price=bracket_res["new_sl"],
-                        side=active_position["side"],
-                        contracts=active_position["contracts"]
+                        side=pos_item["side"],
+                        contracts=pos_item["contracts"]
                     )
 
         # Step 5: Autonomous Active Position Management (TP, SL, Trailing, AI Reversal)
         closed_trade = None
-        if active_position is not None and config.AUTO_EXECUTION:
-            pos_side = active_position.get("side")
-            tp_price = active_position.get("take_profit")
-            sl_price = active_position.get("stop_loss")
-            jarvis_sig = focus_eval.get("jarvis_signal")
-            
-            # Check Take Profit Target Hit
-            if (pos_side == "BUY" and tp_price and mark_price >= tp_price) or \
-               (pos_side == "SELL" and tp_price and mark_price <= tp_price):
-                logger.info(f"🎯 [AUTO TAKE-PROFIT] Target ${tp_price} reached at ${mark_price:.4f}! Booking profit on {focus_coin}...")
-                closed_trade = self.exchange.close_position(reason="TAKE_PROFIT")
-                active_position = None
+        if active_positions and config.AUTO_EXECUTION:
+            for pos_item in list(active_positions):
+                pos_sym = pos_item.get("symbol", "")
+                pos_side = pos_item.get("side")
+                tp_price = pos_item.get("take_profit")
+                sl_price = pos_item.get("stop_loss")
+                pos_mark = float(pos_item.get("mark_price") or 0.0)
+                
+                # Check Take Profit Target Hit
+                if (pos_side == "BUY" and tp_price and pos_mark >= tp_price) or \
+                   (pos_side == "SELL" and tp_price and pos_mark <= tp_price):
+                    logger.info(f"🎯 [AUTO TAKE-PROFIT] Target ${tp_price} reached at ${pos_mark:.4f}! Booking profit on {pos_sym}...")
+                    c_res = self.exchange.close_position(product_id=pos_item.get("product_id"), reason="TAKE_PROFIT")
+                    if c_res.get("success"):
+                        closed_trade = c_res
+                        active_positions = [p for p in active_positions if p.get("product_id") != pos_item.get("product_id")]
+                        break
 
-            # Check Stop Loss Target Hit
-            elif (pos_side == "BUY" and sl_price and mark_price <= sl_price) or \
-                 (pos_side == "SELL" and sl_price and mark_price >= sl_price):
-                logger.info(f"🛑 [AUTO STOP-LOSS] Level ${sl_price} breached at ${mark_price:.4f}! Cutting loss on {focus_coin}...")
-                closed_trade = self.exchange.close_position(reason="STOP_LOSS")
-                active_position = None
+                # Check Stop Loss Target Hit
+                elif (pos_side == "BUY" and sl_price and pos_mark <= sl_price) or \
+                     (pos_side == "SELL" and sl_price and pos_mark >= sl_price):
+                    logger.info(f"🛑 [AUTO STOP-LOSS] Level ${sl_price} breached at ${pos_mark:.4f}! Cutting loss on {pos_sym}...")
+                    c_res = self.exchange.close_position(product_id=pos_item.get("product_id"), reason="STOP_LOSS")
+                    if c_res.get("success"):
+                        closed_trade = c_res
+                        active_positions = [p for p in active_positions if p.get("product_id") != pos_item.get("product_id")]
+                        break
 
-            # Jarvis AI Strong Adverse Reversal Exit
-            elif jarvis_sig and pos_side == "BUY" and jarvis_sig.action == "SELL" and jarvis_sig.confidence >= 0.82:
-                logger.info(f"🧠 [AI EMERGENCY EXIT] Jarvis AI detected strong bearish reversal. Closing BUY scalp on {focus_coin}...")
-                closed_trade = self.exchange.close_position(reason="AI_REVERSAL_EXIT")
-                active_position = None
-            elif jarvis_sig and pos_side == "SELL" and jarvis_sig.action == "BUY" and jarvis_sig.confidence >= 0.82:
-                logger.info(f"🧠 [AI EMERGENCY EXIT] Jarvis AI detected strong bullish surge. Closing SELL scalp on {focus_coin}...")
-                closed_trade = self.exchange.close_position(reason="AI_REVERSAL_EXIT")
-                active_position = None
+        active_position = active_positions[0] if active_positions else None
 
         if closed_trade:
             self.risk_officer.record_trade_result(closed_trade)
@@ -382,8 +385,28 @@ class SwarmOrchestrator:
                 "is_top_pick": (coin == top_coin and top_pick and top_pick["opp_score"] >= 0.70)
             }
 
+        total_margin_inr = round(sum(p.get("margin_inr", 0.0) for p in active_positions), 2)
+        total_pnl_inr = round(sum(p.get("unrealized_pnl_inr", 0.0) for p in active_positions), 2)
+        total_pnl_usd = round(sum(p.get("unrealized_pnl_usd", 0.0) for p in active_positions), 2)
+        total_notional_inr = round(sum(p.get("notional_inr", 0.0) for p in active_positions), 2)
+        total_notional_usd = round(sum(p.get("notional_usd", 0.0) for p in active_positions), 2)
+        combined_roi_pct = round((total_pnl_inr / max(1.0, total_margin_inr)) * 100, 2) if active_positions else 0.0
+
+        positions_summary = {
+            "total_open": len(active_positions),
+            "total_margin_inr": total_margin_inr,
+            "total_notional_usd": total_notional_usd,
+            "total_notional_inr": total_notional_inr,
+            "total_unrealized_pnl_inr": total_pnl_inr,
+            "total_unrealized_pnl_usd": total_pnl_usd,
+            "total_roi_pct": combined_roi_pct
+        }
+
         result_payload = {
             "state": focus_state,
+            "active_positions": active_positions,
+            "active_position": active_position,
+            "positions_summary": positions_summary,
             "analyst_signal": focus_eval.get("analyst_signal"),
             "news_signal": focus_eval.get("news_signal"),
             "strategy_profile": focus_eval.get("strategy_profile"),

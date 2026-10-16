@@ -438,120 +438,162 @@ class DeltaExchangeManager:
         except Exception as e:
             logger.debug(f"Could not sync fills trade history: {e}")
 
-    def get_active_position(self) -> Optional[Dict[str, Any]]:
-        """Returns the active position directly from Delta Demo servers or Paper engine with live mark-to-market PnL."""
+    def get_all_active_positions(self) -> List[Dict[str, Any]]:
+        """Returns ALL currently open positions across all coins directly from Delta Exchange or Paper engine."""
+        active_positions = []
         if self.mode in ["demo", "live"] and self.auth_client:
             try:
-                # 1. Query all positions across the account to find any active open position
-                m_pos = None
-                try:
-                    all_pos_res = self.auth_client.request('GET', '/v2/positions/margined', auth=True).json()
-                    positions_list = all_pos_res.get("result", []) if isinstance(all_pos_res, dict) else (all_pos_res if isinstance(all_pos_res, list) else [])
-                    # Match current product_id first, or any active position
-                    for p in positions_list:
-                        if int(p.get("size") or 0) != 0:
-                            if p.get("product_id") == self.product_id or m_pos is None:
-                                m_pos = p
-                                if p.get("product_id") == self.product_id:
-                                    break
-                except Exception as e_pos:
-                    logger.debug(f"Could not fetch /v2/positions/margined: {e_pos}")
-
-                # Fallback to single product lookup
-                if not m_pos:
-                    try:
-                        m_pos = self.auth_client.get_margined_position(self.product_id)
-                    except Exception:
-                        pass
-
-                if isinstance(m_pos, dict) and m_pos.get("size"):
-                    raw_size = int(m_pos["size"])
-                    if raw_size != 0:
-                        pos_sym = m_pos.get("product_symbol") or self.symbol
-                        side = "BUY" if raw_size > 0 else "SELL"
-                        entry = float(m_pos.get("entry_price") or 0.0)
-                        liq = float(m_pos.get("liquidation_price") or 0.0)
-                        margin_usd = float(m_pos.get("margin") or 0.0)
-                        
-                        # Live mark-to-market PnL
-                        ticker = self.fetch_live_ticker(pos_sym)
-                        mark = float(ticker.get("mark_price") or entry)
-                        
-                        # Determine coin-specific contract value
-                        c_val = 0.001 if "BTC" in pos_sym else (
-                            0.01 if "ETH" in pos_sym else (
-                                0.1 if "SOL" in pos_sym else 1.0
-                            )
-                        )
-                        
-                        # 1. Delta's server-computed unrealized PnL (exact to exchange)
-                        delta_unrealized = m_pos.get("unrealized_pnl")
-                        live_pnl_usd = None
-                        if delta_unrealized is not None and str(delta_unrealized) != "":
-                            try:
-                                live_pnl_usd = float(delta_unrealized)
-                            except (ValueError, TypeError):
-                                pass
-
-                        # 2. Precise fallback mark-to-market using contract value
-                        if live_pnl_usd is None:
-                            if side == "BUY":
-                                live_pnl_usd = (mark - entry) * abs(raw_size) * c_val
-                            else:
-                                live_pnl_usd = (entry - mark) * abs(raw_size) * c_val
-
-                        live_pnl_inr = round(live_pnl_usd * config.USD_INR_RATE, 2)
-                        
-                        # Ensure accurate margin in USD if missing
-                        if margin_usd <= 0.0 and entry > 0:
-                            lev = float(self.active_leverage or config.LEVERAGE or 100)
-                            margin_usd = (abs(raw_size) * c_val * entry) / lev
-                        
-                        # Preserve dynamic adjusted SL and TP targets if already tuned by Strategy Generator
-                        if self.last_active_pos and self.last_active_pos.get("stop_loss"):
-                            sl_price = self.last_active_pos["stop_loss"]
-                        else:
-                            sl_price = round(entry * (0.9975 if side == "BUY" else 1.0025), 4)
-
-                        if self.last_active_pos and self.last_active_pos.get("take_profit"):
-                            tp_price = self.last_active_pos["take_profit"]
-                        else:
-                            tp_price = round(entry * (1.0055 if side == "BUY" else 0.9945), 4)
-                        
-                        pos_dict = {
-                            "symbol": pos_sym,
-                            "product_id": m_pos.get("product_id", self.product_id),
-                            "side": side,
-                            "contracts": abs(raw_size),
-                            "entry_price": round(entry, 4),
-                            "mark_price": round(mark, 4),
-                            "stop_loss": sl_price,
-                            "take_profit": tp_price,
-                            "liquidation_price": round(liq, 4),
-                            "margin_inr": round(margin_usd * config.USD_INR_RATE, 2),
-                            "unrealized_pnl_inr": live_pnl_inr,
-                            "unrealized_pnl_usd": round(live_pnl_usd, 2),
-                            "highest_price": self.last_active_pos.get("highest_price", mark) if self.last_active_pos else mark,
-                            "lowest_price": self.last_active_pos.get("lowest_price", mark) if self.last_active_pos else mark,
-                            "open_time": self.last_active_pos.get("open_time", time.time()) if self.last_active_pos else time.time()
-                        }
-                        self.last_active_pos = pos_dict
-                        return pos_dict
+                all_pos_res = self.auth_client.request('GET', '/v2/positions/margined', auth=True).json()
+                positions_list = all_pos_res.get("result", []) if isinstance(all_pos_res, dict) else (all_pos_res if isinstance(all_pos_res, list) else [])
                 
-                # If size == 0 or position is closed:
-                if self.last_active_pos is not None:
-                    logger.info("🟢 Active position closed on Delta Exchange. Refreshing trade history...")
+                if not hasattr(self, "positions_memory"):
+                    self.positions_memory = {}
+
+                open_pids = set()
+
+                for p in positions_list:
+                    raw_size = int(p.get("size") or 0)
+                    if raw_size == 0:
+                        continue
+                    
+                    pos_pid = p.get("product_id")
+                    open_pids.add(pos_pid)
+                    pos_sym = p.get("product_symbol") or self.symbol
+                    side = "BUY" if raw_size > 0 else "SELL"
+                    entry = float(p.get("entry_price") or 0.0)
+                    liq = float(p.get("liquidation_price") or 0.0)
+                    margin_usd = float(p.get("margin") or 0.0)
+
+                    # Ticker & live mark price
+                    ticker = self.fetch_live_ticker(pos_sym)
+                    mark = float(ticker.get("mark_price") or entry)
+
+                    # Dynamic coin contract value & leverage
+                    c_val = 0.001 if "BTC" in pos_sym else (
+                        0.01 if "ETH" in pos_sym else (
+                            0.1 if "SOL" in pos_sym else 1.0
+                        )
+                    )
+                    coin_lev = 50 if "SOL" in pos_sym else int(getattr(config, "LEVERAGE", 100))
+
+                    # 1. Delta's server-computed unrealized PnL (exact to exchange)
+                    delta_unrealized = p.get("unrealized_pnl")
+                    live_pnl_usd = None
+                    if delta_unrealized is not None and str(delta_unrealized) != "":
+                        try:
+                            live_pnl_usd = float(delta_unrealized)
+                        except (ValueError, TypeError):
+                            pass
+
+                    # 2. Fallback mark-to-market using contract value
+                    if live_pnl_usd is None:
+                        if side == "BUY":
+                            live_pnl_usd = (mark - entry) * abs(raw_size) * c_val
+                        else:
+                            live_pnl_usd = (entry - mark) * abs(raw_size) * c_val
+
+                    live_pnl_inr = round(live_pnl_usd * config.USD_INR_RATE, 2)
+
+                    # Ensure accurate margin in USD if missing
+                    if margin_usd <= 0.0 and entry > 0:
+                        margin_usd = (abs(raw_size) * c_val * entry) / coin_lev
+
+                    margin_inr = round(margin_usd * config.USD_INR_RATE, 2)
+                    notional_usd = round(abs(raw_size) * c_val * mark, 2)
+                    notional_inr = round(notional_usd * config.USD_INR_RATE, 2)
+                    roi_pct = round((live_pnl_inr / max(1.0, margin_inr)) * 100, 2)
+
+                    # Recall tuned SL / TP brackets if tuned
+                    mem = self.positions_memory.get(pos_pid, {})
+                    if mem.get("stop_loss"):
+                        sl_price = mem["stop_loss"]
+                    else:
+                        sl_price = round(entry * (0.9975 if side == "BUY" else 1.0025), 4)
+
+                    if mem.get("take_profit"):
+                        tp_price = mem["take_profit"]
+                    else:
+                        tp_price = round(entry * (1.0055 if side == "BUY" else 0.9945), 4)
+
+                    # Distances
+                    dist_sl_pct = round(abs(mark - sl_price) / mark * 100, 2) if mark > 0 else 0.0
+                    dist_tp_pct = round(abs(tp_price - mark) / mark * 100, 2) if mark > 0 else 0.0
+                    dist_liq_pct = round(abs(mark - liq) / mark * 100, 2) if mark > 0 and liq > 0 else 0.0
+
+                    pos_dict = {
+                        "symbol": pos_sym,
+                        "product_id": pos_pid,
+                        "side": side,
+                        "leverage": coin_lev,
+                        "contracts": abs(raw_size),
+                        "contract_value": c_val,
+                        "entry_price": round(entry, 4),
+                        "mark_price": round(mark, 4),
+                        "stop_loss": sl_price,
+                        "take_profit": tp_price,
+                        "liquidation_price": round(liq, 4),
+                        "margin_usd": round(margin_usd, 2),
+                        "margin_inr": margin_inr,
+                        "notional_usd": notional_usd,
+                        "notional_inr": notional_inr,
+                        "unrealized_pnl_usd": round(live_pnl_usd, 2),
+                        "unrealized_pnl_inr": live_pnl_inr,
+                        "roi_pct": roi_pct,
+                        "dist_sl_pct": dist_sl_pct,
+                        "dist_tp_pct": dist_tp_pct,
+                        "dist_liq_pct": dist_liq_pct,
+                        "highest_price": max(mem.get("highest_price", mark), mark),
+                        "lowest_price": min(mem.get("lowest_price", mark), mark),
+                        "adaptive_adjustments": mem.get("adaptive_adjustments", []),
+                        "open_time": p.get("created_at") or mem.get("open_time", time.time())
+                    }
+                    self.positions_memory[pos_pid] = pos_dict
+                    active_positions.append(pos_dict)
+
+                # Clean closed positions from memory
+                for pid in list(self.positions_memory.keys()):
+                    if pid not in open_pids:
+                        del self.positions_memory[pid]
+
+                if active_positions:
+                    self.last_active_pos = active_positions[0]
+                elif self.last_active_pos is not None:
+                    logger.info("🟢 All active positions closed on Delta Exchange. Refreshing trade history...")
                     self.sync_demo_trade_history()
                     self.last_active_pos = None
 
             except Exception as e:
-                logger.debug(f"Could not refresh live position: {e}")
+                err_str = str(e)
+                if "ip_not_whitelisted_for_api_key" in err_str:
+                    self.ip_restricted = True
+                    self.ip_whitelisted = False
+                    import re
+                    m_ip = re.search(r'"client_ip":"([^"]+)"', err_str)
+                    if m_ip:
+                        self.detected_client_ip = m_ip.group(1)
+                logger.debug(f"Could not refresh live positions: {e}")
 
-        if self.mode == "paper":
-            return self.paper.position
-        return None
+        elif self.mode == "paper":
+            if self.paper.position:
+                p_pos = dict(self.paper.position)
+                p_sym = p_pos.get("symbol", self.symbol)
+                p_cval = 0.001 if "BTC" in p_sym else (0.01 if "ETH" in p_sym else (0.1 if "SOL" in p_sym else 1.0))
+                p_mark = float(self.fetch_live_ticker(p_sym).get("mark_price", p_pos.get("entry_price", 1.0)))
+                p_pos["contract_value"] = p_cval
+                p_pos["mark_price"] = p_mark
+                p_pos["notional_usd"] = round(p_pos.get("contracts", 1) * p_cval * p_mark, 2)
+                p_pos["notional_inr"] = round(p_pos["notional_usd"] * config.USD_INR_RATE, 2)
+                p_pos["roi_pct"] = p_pos.get("return_on_equity_pct", 0.0)
+                return [p_pos]
 
-    def close_position(self, reason: str = "MANUAL_CLOSE") -> Dict[str, Any]:
+        return active_positions
+
+    def get_active_position(self) -> Optional[Dict[str, Any]]:
+        """Returns the primary active position (first open position) for backward compatibility."""
+        positions = self.get_all_active_positions()
+        return positions[0] if positions else None
+
+    def close_position(self, product_id: Optional[int] = None, symbol: Optional[str] = None, reason: str = "MANUAL_CLOSE") -> Dict[str, Any]:
         """Closes any active position at market price across Demo, Live, or Paper mode."""
         if self.mode == "paper" and self.paper.position:
             mark = float(self.fetch_live_ticker().get("mark_price", 1.3680))
@@ -559,14 +601,23 @@ class DeltaExchangeManager:
             return {"success": True, "trade": res}
 
         elif self.mode in ["demo", "live"] and self.auth_client:
-            pos = self.last_active_pos or self.get_active_position()
-            if not pos:
+            positions = self.get_all_active_positions()
+            target_pos = None
+            if product_id is not None:
+                target_pos = next((p for p in positions if p.get("product_id") == product_id), None)
+            elif symbol is not None:
+                target_pos = next((p for p in positions if symbol.upper() in p.get("symbol", "").upper()), None)
+            
+            if not target_pos:
+                target_pos = positions[0] if positions else self.last_active_pos
+
+            if not target_pos:
                 return {"success": False, "reason": "No active position on Delta to close."}
 
-            contracts = pos["contracts"]
-            side = pos["side"]
+            contracts = target_pos["contracts"]
+            side = target_pos["side"]
             exit_side = "sell" if side == "BUY" else "buy"
-            target_pid = pos.get("product_id", self.product_id)
+            target_pid = target_pos.get("product_id", self.product_id)
 
             # 1. Cancel pending stop/take profit orders to prevent orphan execution
             try:
@@ -584,16 +635,17 @@ class DeltaExchangeManager:
                     order_type=OrderType.MARKET,
                     reduce_only='true'
                 )
-                logger.info(f"Market close executed for {contracts} contracts: {close_res}")
+                logger.info(f"Market close executed for {contracts} contracts of {target_pos.get('symbol')}: {close_res}")
                 time.sleep(0.5)
                 self.sync_demo_trade_history()
+                if hasattr(self, "positions_memory") and target_pid in self.positions_memory:
+                    del self.positions_memory[target_pid]
                 self.last_active_pos = None
-                return {"success": True, "result": close_res, "reason": reason}
+                return {"success": True, "result": close_res, "reason": reason, "closed_symbol": target_pos.get("symbol")}
             except Exception as e:
                 logger.error(f"Error executing market close: {e}")
-                # Fallback to Delta position close API
                 try:
-                    close_all_res = self.auth_client.close_all_positions(close_all_isolated=True, product_ids=[self.product_id])
+                    close_all_res = self.auth_client.close_all_positions(close_all_isolated=True, product_ids=[target_pid])
                     time.sleep(0.5)
                     self.sync_demo_trade_history()
                     self.last_active_pos = None
