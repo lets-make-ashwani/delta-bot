@@ -312,6 +312,11 @@ function renderDashboard(data) {
     if (btnClose) btnClose.style.display = "none";
   }
 
+  // 3.5 Multi-Asset Quant Radar (BTC, ETH, SOL, XRP)
+  if (data.multi_asset_radar) {
+    renderMultiAssetRadar(data.multi_asset_radar, data.top_opportunity);
+  }
+
   // 4. Bot Swarm Deliberation Matrix
   renderSwarmTable(data);
 
@@ -516,3 +521,102 @@ function addLog(msg, type = "info") {
   box.appendChild(div);
   box.scrollTop = box.scrollHeight;
 }
+
+function renderMultiAssetRadar(radar, topOpp) {
+  const container = document.getElementById("radar-cards-grid");
+  if (!container || !radar) return;
+
+  const topCoinBadge = document.getElementById("radar-top-coin");
+  const topActionBadge = document.getElementById("radar-top-action");
+  if (topOpp && topCoinBadge && topActionBadge) {
+    topCoinBadge.innerText = topOpp.coin || "XRP";
+    topActionBadge.innerText = topOpp.action || "HOLD";
+    topActionBadge.style.color = topOpp.action === 'BUY' ? 'var(--green)' : (topOpp.action === 'SELL' ? 'var(--red)' : 'var(--text-dim)');
+  }
+
+  const coins = ["BTC", "ETH", "SOL", "XRP"];
+  let html = "";
+
+  coins.forEach(coin => {
+    const item = radar[coin] || {};
+    const price = item.mark_price ? (item.mark_price < 2 ? `$${item.mark_price.toFixed(4)}` : `$${item.mark_price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`) : "---";
+    const action = item.action || "HOLD";
+    const conf = item.confidence ? `${(item.confidence * 100).toFixed(0)}%` : "50%";
+    const jScore = item.jarvis_score !== undefined ? item.jarvis_score : 0;
+    const jVerdict = item.jarvis_verdict || "NEUTRAL";
+    const regime = item.regime || "RANGING_CHOP";
+    const trigger = item.trigger_bot || "Scanning...";
+    const isTop = item.is_top_pick;
+    const isActive = item.is_active;
+
+    let borderStyle = "1px solid rgba(255, 255, 255, 0.08)";
+    let glow = "";
+    if (isActive) {
+      borderStyle = "1.5px solid var(--cyan)";
+      glow = "box-shadow: 0 0 16px rgba(0, 242, 254, 0.3);";
+    } else if (isTop) {
+      borderStyle = "1.5px solid var(--green)";
+      glow = "box-shadow: 0 0 16px rgba(34, 197, 94, 0.3);";
+    }
+
+    let actionClass = "vote-hold";
+    if (action === "BUY") actionClass = "vote-buy";
+    if (action === "SELL") actionClass = "vote-sell";
+
+    const barWidth = Math.max(5, Math.min(100, ((jScore + 100) / 200) * 100));
+    const barColor = jScore > 20 ? "var(--green)" : (jScore < -20 ? "var(--red)" : "var(--cyan)");
+
+    html += `
+      <div class="glass-card radar-coin-card" style="padding: 14px 16px; border-radius: 12px; border: ${borderStyle}; ${glow} background: rgba(15, 23, 42, 0.7); display: flex; flex-direction: column; gap: 8px; cursor: pointer; transition: all 0.2s;" onclick="switchAssetFocus('${coin}')">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span style="font-weight: 800; font-size: 1.05rem; color: #fff;">${coin}USD</span>
+            ${isActive ? '<span class="badge" style="background: rgba(0,242,254,0.18); color: var(--cyan); font-size: 0.62rem; padding: 2px 6px;">ACTIVE</span>' : ''}
+            ${isTop && !isActive ? '<span class="badge" style="background: rgba(34,197,94,0.18); color: var(--green); font-size: 0.62rem; padding: 2px 6px;">🏆 TOP HUNT</span>' : ''}
+          </div>
+          <span class="mono" style="font-size: 1.02rem; font-weight: 700; color: #fff;">${price}</span>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem;">
+          <span style="color: var(--text-dim); font-size: 0.72rem;">${regime}</span>
+          <span class="badge ${actionClass}" style="font-weight: 700; font-size: 0.72rem; padding: 2px 8px;">${action} ${conf}</span>
+        </div>
+
+        <div>
+          <div style="display: flex; justify-content: space-between; font-size: 0.70rem; color: var(--text-dim); margin-bottom: 3px;">
+            <span>AI Brain: <strong style="color: #fff;" class="mono">${jScore > 0 ? '+' : ''}${jScore}</strong></span>
+            <span style="color: ${barColor}; font-weight: 600;">${jVerdict}</span>
+          </div>
+          <div style="width: 100%; height: 4px; background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden;">
+            <div style="width: ${barWidth}%; height: 100%; background: ${barColor}; transition: width 0.3s;"></div>
+          </div>
+        </div>
+
+        <div style="font-size: 0.72rem; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 6px; margin-top: 2px;">
+          ⚡ <span style="color: #cbd5e1;">${trigger}</span>
+        </div>
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
+}
+
+window.switchAssetFocus = async function(coin) {
+  document.querySelectorAll(".sym-btn").forEach(b => {
+    if (b.dataset.symbol === coin) b.classList.add("active");
+    else b.classList.remove("active");
+  });
+  activeSymbol = coin;
+  try {
+    await fetch("/api/set_symbol", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ symbol: coin })
+    });
+    addLog(`Manually focused radar on [${coin}]`, "info");
+  } catch (err) {
+    console.error("Error setting symbol:", err);
+  }
+};
+

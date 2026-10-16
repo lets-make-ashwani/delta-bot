@@ -100,6 +100,31 @@
       </div>
     </section>
 
+    <!-- Multi-Asset Quant Radar Section (BTC • ETH • SOL • XRP) -->
+    <section class="glass-card radar-section" style="margin-bottom: 20px; padding: 18px 22px; border: 1px solid rgba(0, 242, 254, 0.25); background: linear-gradient(135deg, rgba(15, 23, 42, 0.88), rgba(10, 15, 29, 0.95)); box-shadow: 0 8px 32px rgba(0,0,0,0.45); border-radius: 14px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 1.35rem;">📡</span>
+          <div>
+            <h2 style="font-size: 1.05rem; font-weight: 700; letter-spacing: 0.05em; margin: 0; color: #fff; display: flex; align-items: center; gap: 8px;">
+              MULTI-ASSET QUANT RADAR
+              <span class="badge" style="background: rgba(0,242,254,0.15); color: var(--cyan); border: 1px solid var(--cyan); font-size: 0.65rem;">AUTONOMOUS CROSS-MARKET SCANNER</span>
+            </h2>
+            <span style="font-size: 0.76rem; color: var(--text-dim);">Live real-time quantitative ranking across BTC, ETH, SOL, &amp; XRP perpetuals</span>
+          </div>
+        </div>
+        <div id="radar-top-pick-badge" style="display: flex; align-items: center; gap: 8px; background: rgba(34,197,94,0.12); border: 1px solid var(--green); padding: 5px 14px; border-radius: 20px;">
+          <span class="pulse-dot" style="background: var(--green);"></span>
+          <span style="font-size: 0.8rem; font-weight: 700; color: var(--green);">ACTIVE TARGET: <span id="radar-top-coin">XRP</span> (<span id="radar-top-action">BUY</span>)</span>
+        </div>
+      </div>
+
+      <!-- 4-Card Asset Grid -->
+      <div id="radar-cards-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px;">
+        <!-- Populated dynamically via app.js -->
+      </div>
+    </section>
+
     <!-- Main Grid -->
     <div class="main-grid">
 

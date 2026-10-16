@@ -101,8 +101,9 @@ class RiskGuardianBot(BaseBot):
         if not entry_price or entry_price <= 0:
             return {"approved": False, "reason": "Invalid entry price."}
 
-        # XRPUSD contract value = 1 XRP. Sized dynamically and capped safely
-        contracts = int(notional_usd / entry_price)
+        # Dynamic sizing for any contract: BTC, ETH, SOL, XRP
+        contract_value = float(state.get("contract_value") or 1.0)
+        contracts = int(notional_usd / (entry_price * contract_value))
         contracts = max(1, min(contracts, config.MAX_CONTRACTS_PER_TRADE))
 
         # 4. Bracket Levels (SL & TP)
@@ -110,10 +111,11 @@ class RiskGuardianBot(BaseBot):
         sl_pct = (strategy_profile.get("dynamic_sl_pct") or config.STOP_LOSS_PCT) / 100.0
         tp_pct = (strategy_profile.get("dynamic_tp_pct") or config.TAKE_PROFIT_PCT) / 100.0
 
-        # Tick size is 0.0001 for XRPUSD
-        tick_size = 0.0001
+        # Dynamic tick size per asset
+        tick_size = float(state.get("tick_size") or 0.0001)
+        precision = 4 if tick_size < 0.01 else (2 if tick_size < 1 else 1)
         def round_tick(val: float) -> float:
-            return round(round(val / tick_size) * tick_size, 4)
+            return round(round(val / tick_size) * tick_size, precision)
 
         if proposed_signal.action == "BUY":
             sl_price = round_tick(entry_price * (1.0 - sl_pct))
@@ -122,7 +124,7 @@ class RiskGuardianBot(BaseBot):
             sl_price = round_tick(entry_price * (1.0 + sl_pct))
             tp_price = round_tick(entry_price * (1.0 - tp_pct))
 
-        actual_margin_inr = (contracts * entry_price * config.USD_INR_RATE) / config.LEVERAGE
+        actual_margin_inr = (contracts * contract_value * entry_price * config.USD_INR_RATE) / config.LEVERAGE
 
         return {
             "approved": True,

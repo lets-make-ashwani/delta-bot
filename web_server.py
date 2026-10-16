@@ -206,9 +206,9 @@ def main():
     port = int(os.getenv("PORT", 5000))
     host = os.getenv("HOST", "0.0.0.0")
     print("\n" + "="*80)
-    print(f"🚀 DELTA QUANT WEB DASHBOARD IS RUNNING!")
-    print(f"👉 Local Access: http://127.0.0.1:{port}")
-    print(f"👉 Network/Cloud Access: http://{host}:{port}")
+    print(f"[*] DELTA QUANT WEB DASHBOARD IS RUNNING!")
+    print(f"[*] Local Access: http://127.0.0.1:{port}")
+    print(f"[*] Network/Cloud Access: http://{host}:{port}")
     print("="*80 + "\n")
     
     app.run(host=host, port=port, debug=False, use_reloader=False)

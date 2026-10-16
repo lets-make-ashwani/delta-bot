@@ -158,10 +158,12 @@ class DeltaExchangeManager:
         
         # 1. Dynamically resolve product details on target exchange
         self.target_url = config.INDIA_LIVE_URL if self.mode == "live" else config.DEMO_API_URL
+        self.products_cache: Dict[str, Dict[str, Any]] = {}
         self.product = self._resolve_product(raw_symbol, self.target_url)
         self.symbol = self.product["symbol"]
         self.product_id = self.product["id"]
         self.tick_size = float(self.product.get("tick_size", "0.0001"))
+        self.contract_value = float(self.product.get("contract_value", 1.0))
         
         # Real live intelligence client (fetches live market candles & quotes)
         self.live_intel_client = DeltaRestClient(base_url=config.INDIA_LIVE_URL)
@@ -201,36 +203,71 @@ class DeltaExchangeManager:
             self.sync_demo_trade_history()
 
     def _resolve_product(self, raw_symbol: str, base_url: str) -> Dict[str, Any]:
-        """Auto-discovers product specifications from Delta API based on user input (e.g. XRP, BTC, ETH)."""
+        """Auto-discovers product specifications from Delta API based on user input (e.g. XRP, BTC, ETH, SOL)."""
         clean_name = raw_symbol.replace("USD", "").replace("USDT", "").replace("_INR", "")
+        if clean_name in self.products_cache:
+            return self.products_cache[clean_name]
+
         try:
             r = requests.get(f"{base_url}/v2/products", timeout=5)
             if r.status_code == 200:
                 products = r.json().get("result", [])
-                # Look for perpetual futures matching the clean coin name
+                # Cache all perpetual products for quick switching
+                for p in products:
+                    if p.get("contract_type") == "perpetual_futures":
+                        sym = p.get("symbol", "")
+                        for base_coin in ["BTC", "ETH", "SOL", "XRP"]:
+                            if base_coin in sym and base_coin not in self.products_cache:
+                                self.products_cache[base_coin] = p
+                
+                if clean_name in self.products_cache:
+                    return self.products_cache[clean_name]
                 for p in products:
                     sym = p.get("symbol", "")
                     if clean_name in sym and p.get("contract_type") == "perpetual_futures":
-                        return p
-                # Fallback to any product with symbol
-                for p in products:
-                    if clean_name in p.get("symbol", ""):
+                        self.products_cache[clean_name] = p
                         return p
         except Exception as e:
             logger.error(f"Error resolving product on {base_url}: {e}")
 
-        # Default fallback
-        if "deltaex.org" in base_url or "cdn-ind" in base_url:
-            return {"id": 93723, "symbol": "XRPUSD", "tick_size": "0.0001"}
-        if "testnet" in base_url or "demo" in base_url:
-            return {"id": 2181, "symbol": "XRPUSDT", "tick_size": "0.0001"}
-        return {"id": 14969, "symbol": "XRPUSD", "tick_size": "0.0001"}
+        # Default fallbacks
+        defaults = {
+            "BTC": {"id": 84 if "testnet" in base_url or "deltaex.org" in base_url else 27, "symbol": "BTCUSD", "tick_size": "0.1", "contract_value": "0.001"},
+            "ETH": {"id": 1699 if "testnet" in base_url or "deltaex.org" in base_url else 3136, "symbol": "ETHUSD", "tick_size": "0.05", "contract_value": "0.01"},
+            "SOL": {"id": 92572 if "testnet" in base_url or "deltaex.org" in base_url else 14823, "symbol": "SOLUSD", "tick_size": "0.0001", "contract_value": "1"},
+            "XRP": {"id": 93723 if "testnet" in base_url or "deltaex.org" in base_url else 14969, "symbol": "XRPUSD", "tick_size": "0.0001", "contract_value": "1"}
+        }
+        fallback = defaults.get(clean_name, defaults["XRP"])
+        self.products_cache[clean_name] = fallback
+        return fallback
 
-    def fetch_live_ticker(self) -> Dict[str, Any]:
-        """Fetches live ticker and best bid/ask quotes."""
+    def switch_symbol(self, raw_symbol: str) -> bool:
+        """Dynamically switches active instrument between BTC, ETH, SOL, XRP."""
+        raw_upper = raw_symbol.upper().replace("USD", "").replace("USDT", "")
+        if clean := raw_upper:
+            prod = self._resolve_product(clean, self.target_url)
+            if prod:
+                self.product = prod
+                self.symbol = prod["symbol"]
+                self.product_id = prod["id"]
+                self.tick_size = float(prod.get("tick_size", "0.0001"))
+                self.contract_value = float(prod.get("contract_value", 1.0))
+                if self.auth_client:
+                    try:
+                        self.auth_client.set_leverage(self.product_id, config.LEVERAGE)
+                        logger.info(f"Set {config.LEVERAGE}x leverage for new symbol {self.symbol} (ID: {self.product_id})")
+                    except Exception as e:
+                        logger.warning(f"Could not set leverage on switch: {e}")
+                logger.info(f"Active trading symbol switched to: {self.symbol} (ID: {self.product_id}, Contract Value: {self.contract_value})")
+                return True
+        return False
+
+    def fetch_live_ticker(self, symbol: Optional[str] = None) -> Dict[str, Any]:
+        """Fetches live ticker and best bid/ask quotes for target or specified symbol."""
+        sym = (symbol or self.symbol).upper()
+        target_sym = sym if ("USD" in sym or "USDT" in sym) else f"{sym}USD"
         try:
-            # Query the target exchange first
-            r = requests.get(f"{self.target_url}/v2/tickers/{self.symbol}", timeout=4)
+            r = requests.get(f"{self.target_url}/v2/tickers/{target_sym}", timeout=3)
             if r.status_code == 200:
                 res = r.json().get("result", {})
                 if res and res.get("quotes"):
@@ -239,27 +276,26 @@ class DeltaExchangeManager:
             pass
 
         # Fallback to live India ticker
-        live_sym = "XRPUSD" if "XRP" in self.symbol else self.symbol
         try:
-            return self.live_intel_client.get_ticker(live_sym)
+            return self.live_intel_client.get_ticker(target_sym)
         except Exception as e:
-            logger.error(f"Error fetching ticker: {e}")
+            logger.debug(f"Error fetching ticker for {target_sym}: {e}")
             return {}
 
-    def fetch_candles(self, count: int = 60, resolution: str = "1m") -> list:
+    def fetch_candles(self, count: int = 60, resolution: str = "1m", symbol: Optional[str] = None) -> list:
         """Fetches 1-minute historical candles from high-volume live feed."""
         now = int(time.time())
         start = now - (count * 60)
-        # Use live India feed for rich candle history
-        live_sym = "XRPUSD" if "XRP" in self.symbol else ("BTCUSD" if "BTC" in self.symbol else "ETHUSD")
+        sym = (symbol or self.symbol).upper()
+        target_sym = sym if ("USD" in sym or "USDT" in sym) else f"{sym}USD"
         try:
-            candles = self.live_intel_client.get_candles(live_sym, resolution=resolution, start=start, end=now)
+            candles = self.live_intel_client.get_candles(target_sym, resolution=resolution, start=start, end=now)
             if isinstance(candles, list):
                 return candles
             elif isinstance(candles, dict):
                 return candles.get("result", [])
         except Exception as e:
-            logger.error(f"Error fetching live candles: {e}")
+            logger.debug(f"Error fetching live candles for {target_sym}: {e}")
         return []
 
     def get_balance(self) -> Dict[str, float]:
@@ -543,7 +579,8 @@ class DeltaExchangeManager:
                     "entry_price": float(entry_price),
                     "stop_loss": float(sl_price),
                     "take_profit": float(tp_price),
-                    "margin_inr": round((int(contracts) * float(entry_price) * config.USD_INR_RATE) / config.LEVERAGE, 2),
+                    "contract_value": self.contract_value,
+                    "margin_inr": round((int(contracts) * self.contract_value * float(entry_price) * config.USD_INR_RATE) / config.LEVERAGE, 2),
                     "open_time": time.time()
                 }
 
