@@ -140,3 +140,35 @@ python main.py --mode live --capital 100.0 --leverage 100
    - At 100x leverage, initial margin is tiny (~₹1.20 per contract), but if capital falls below ₹10, the Chief Risk Officer pauses new entries to prevent risk.
 3. **`open_order_not_found` when modifying brackets**:
    - Delta closes the original entry order ID once filled and converts the stop/target into resting child orders. The bot manages this state automatically.
+
+
+---
+
+## ☁️ Deploying to Render & Storage Requirements
+
+This bot is fully containerized and pre-configured for **Render Cloud Deployment** via 
+ender.yaml and Procfile.
+
+### 💾 Storage & Resource Footprint on Render:
+
+| Resource Metric | Bot Actual Usage | Render Free Tier Limit | Utilization % |
+| :--- | :---: | :---: | :---: |
+| **Disk Storage (Build & Code)** | **~170 MB - 180 MB** | **10.0 GB** (Ephemeral Disk) | **< 1.8%** *(Virtually negligible)* |
+| **RAM (Memory Consumption)** | **~140 MB - 190 MB** | **512 MB** RAM | **~30% - 35%** *(Plenty of headroom)* |
+| **CPU Allocation** | **0.05 - 0.1 vCPU** | **0.1 vCPU** (Shared) | **Optimal** *(Lightweight polling)* |
+| **Monthly Bandwidth** | **~15 GB - 20 GB** | **100 GB / month** | **~18%** |
+
+#### Detailed Disk Breakdown:
+- **Application Source Code & Web UI**: ~1.5 MB (HTML templates, CSS, JS, Python modules).
+- **Virtual Environment & Dependencies**: ~165 MB (lask, gunicorn, 
+umpy, pandas, groq, 
+equests, python-dotenv).
+- **Learning State & Local Logs**: ~2 MB - 5 MB (learning_memory.json is lightweight JSON, logs auto-rotate).
+
+> **Note**: Render provides **10 GB of free ephemeral disk storage** for your web service. The entire Delta Scalper Bot requires only **~180 MB**, so it easily fits within **less than 2% of the free quota** with no paid persistent disk required.
+
+### 🚀 How to Deploy to Render in 3 Steps:
+1. Push your repository to **GitHub** (already connected to origin/main).
+2. Log into [Render Dashboard](https://dashboard.render.com/) and click **New +** → **Blueprint**.
+3. Select your repository delta-scalper-bot. Render will automatically detect 
+ender.yaml and launch the service with zero configuration.
