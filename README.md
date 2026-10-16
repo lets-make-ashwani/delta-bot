@@ -20,11 +20,19 @@ An AI-driven multi-agent algorithmic trading system engineered for **100x scalpi
 
 ## 🚀 How to Trade on https://demo.delta.exchange/
 
-### Step 1: Get Demo API Keys
+### Step 1: Get Demo API Keys & Whitelist IP
 1. Open your browser and log into **[https://demo.delta.exchange/](https://demo.delta.exchange/)**.
 2. Click your **Profile Icon** (top right) -> **API Keys**.
 3. Click **Create API Key**.
-4. Copy the generated **API Key** and **API Secret**.
+4. In the **IP Whitelist** box, enter your machine's current public IP:
+   ```text
+   152.59.178.77
+   ```
+   *(Delta Exchange mandates at least one IP address for security; it will reject a blank field).*
+   > **Tip for dynamic home internet (Jio/Airtel):** You can enter multiple comma-separated IPs if your ISP assigns new IPs periodically, e.g.:
+   > `152.59.178.77, 152.59.182.181, 152.58.184.141`
+5. Copy the generated **API Key** and **API Secret**.
+6. Run `python test_api_key.py` in your terminal to verify that Delta accepts your connection!
 
 ### Step 2: Configure Your Bot
 In `C:\Users\ashwani\Desktop\delta-scalper-bot`, create or edit a file named `.env`:
