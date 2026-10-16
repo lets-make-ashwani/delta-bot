@@ -49,3 +49,4 @@ Thumbs.db
 # Antigravity & Agent artifacts
 .agents/
 scratch/
+learning_memory.json

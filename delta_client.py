@@ -284,7 +284,11 @@ class DeltaExchangeManager:
             elif "ip_not_whitelisted_for_api_key" in err_str:
                 self.ip_restricted = True
                 self.ip_whitelisted = False
-                logger.warning("Delta API key IP not whitelisted.")
+                import re
+                m_ip = re.search(r'"client_ip":"([^"]+)"', err_str)
+                if m_ip:
+                    self.detected_client_ip = m_ip.group(1)
+                logger.warning(f"Delta API key IP not whitelisted. Current IP: {self.detected_client_ip}")
             else:
                 logger.warning(f"Could not set leverage for {symbol}: {e}")
         return target_leverage
@@ -409,15 +413,22 @@ class DeltaExchangeManager:
                     price = float(f.get("price", 0.0))
                     side = f.get("side", "").upper()
                     
+                    trade_sym = f.get("product_symbol", self.symbol)
+                    c_val = 0.001 if "BTC" in trade_sym else (
+                        0.01 if "ETH" in trade_sym else (
+                            0.1 if "SOL" in trade_sym else 1.0
+                        )
+                    )
+                    margin_cost = max(1.0, (contracts * c_val * price / config.LEVERAGE))
                     parsed_trades.append({
                         "id": fill_id,
-                        "symbol": f.get("product_symbol", self.symbol),
+                        "symbol": trade_sym,
                         "side": side,
                         "contracts": contracts,
                         "exit_price": price,
                         "pnl_usd": round(pnl_usd, 2),
                         "pnl_inr": pnl_inr,
-                        "pnl_pct_on_margin": round((pnl_usd / max(1.0, (contracts * price / config.LEVERAGE))) * 100, 2),
+                        "pnl_pct_on_margin": round((pnl_usd / margin_cost) * 100, 2),
                         "reason": "TAKE_PROFIT" if pnl_usd > 0 else "STOP_LOSS",
                         "timestamp": f.get("created_at", "")
                     })
@@ -466,11 +477,35 @@ class DeltaExchangeManager:
                         ticker = self.fetch_live_ticker(pos_sym)
                         mark = float(ticker.get("mark_price") or entry)
                         
-                        if side == "BUY":
-                            live_pnl_usd = (mark - entry) * abs(raw_size)
-                        else:
-                            live_pnl_usd = (entry - mark) * abs(raw_size)
+                        # Determine coin-specific contract value
+                        c_val = 0.001 if "BTC" in pos_sym else (
+                            0.01 if "ETH" in pos_sym else (
+                                0.1 if "SOL" in pos_sym else 1.0
+                            )
+                        )
+                        
+                        # 1. Delta's server-computed unrealized PnL (exact to exchange)
+                        delta_unrealized = m_pos.get("unrealized_pnl")
+                        live_pnl_usd = None
+                        if delta_unrealized is not None and str(delta_unrealized) != "":
+                            try:
+                                live_pnl_usd = float(delta_unrealized)
+                            except (ValueError, TypeError):
+                                pass
+
+                        # 2. Precise fallback mark-to-market using contract value
+                        if live_pnl_usd is None:
+                            if side == "BUY":
+                                live_pnl_usd = (mark - entry) * abs(raw_size) * c_val
+                            else:
+                                live_pnl_usd = (entry - mark) * abs(raw_size) * c_val
+
                         live_pnl_inr = round(live_pnl_usd * config.USD_INR_RATE, 2)
+                        
+                        # Ensure accurate margin in USD if missing
+                        if margin_usd <= 0.0 and entry > 0:
+                            lev = float(self.active_leverage or config.LEVERAGE or 100)
+                            margin_usd = (abs(raw_size) * c_val * entry) / lev
                         
                         # Preserve dynamic adjusted SL and TP targets if already tuned by Strategy Generator
                         if self.last_active_pos and self.last_active_pos.get("stop_loss"):
@@ -664,6 +699,14 @@ class DeltaExchangeManager:
 
                 return {"success": True, "result": entry_res}
             except Exception as e:
+                err_str = str(e)
+                if "ip_not_whitelisted_for_api_key" in err_str:
+                    self.ip_restricted = True
+                    self.ip_whitelisted = False
+                    import re
+                    m_ip = re.search(r'"client_ip":"([^"]+)"', err_str)
+                    if m_ip:
+                        self.detected_client_ip = m_ip.group(1)
                 logger.error(f"Error placing scalp order: {e}")
                 return {"success": False, "error": str(e)}
 
