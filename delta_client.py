@@ -170,6 +170,10 @@ class DeltaExchangeManager:
         
         # Authenticated execution client (for demo or live)
         self.auth_client = None
+        self.detected_client_ip = "152.59.178.77"
+        self.ip_whitelisted = False
+        self.ip_restricted = False
+
         if self.mode in ["demo", "testnet", "live"] and config.API_KEY and config.API_SECRET:
             self.auth_client = DeltaRestClient(
                 base_url=self.target_url,
@@ -180,8 +184,27 @@ class DeltaExchangeManager:
             try:
                 self.auth_client.set_leverage(self.product_id, config.LEVERAGE)
                 logger.info(f"Set {config.LEVERAGE}x leverage for {self.symbol} (ID: {self.product_id})")
+                self.ip_whitelisted = True
+                self.ip_restricted = False
             except Exception as e:
-                logger.warning(f"Could not automatically set leverage: {e}")
+                err_str = str(e)
+                if "ip_not_whitelisted_for_api_key" in err_str:
+                    self.ip_restricted = True
+                    self.ip_whitelisted = False
+                    try:
+                        import json
+                        s = err_str.find("{")
+                        e_idx = err_str.rfind("}") + 1
+                        if s != -1 and e_idx != -1:
+                            err_data = json.loads(err_str[s:e_idx])
+                            detected = err_data.get("error", {}).get("context", {}).get("client_ip")
+                            if detected:
+                                self.detected_client_ip = detected
+                    except Exception:
+                        pass
+                    logger.warning(f"Delta API key IP not whitelisted. Delta detected client IP: {self.detected_client_ip}")
+                else:
+                    logger.warning(f"Could not automatically set leverage: {e}")
         else:
             if self.mode in ["demo", "testnet"] and (not config.API_KEY or not config.API_SECRET):
                 logger.warning(f"No API key provided for DEMO mode. Falling back to PAPER trading mode.")

@@ -9,6 +9,7 @@ import sys
 import time
 import threading
 import logging
+import requests
 from flask import Flask, render_template, jsonify, request
 from config import config
 from orchestrator import SwarmOrchestrator
@@ -201,15 +202,44 @@ def set_margin_ratio():
     logger.info(f"Updated Margin Ratio Per Trade to: {ratio * 100:.0f}% of available demo fund")
     return jsonify({"success": True, "margin_ratio": ratio, "pct": f"{ratio * 100:.0f}%"})
 
+@app.route("/api/server-ip")
+def get_server_ip():
+    """Returns outbound public IP and Delta API whitelist status (ideal for Render Free Tier)."""
+    orch = get_orchestrator()
+    try:
+        outbound_ip = requests.get("https://api.ipify.org", timeout=4).text.strip()
+    except Exception:
+        outbound_ip = getattr(orch.exchange, "detected_client_ip", "152.59.178.77")
+
+    detected_ip = getattr(orch.exchange, "detected_client_ip", outbound_ip)
+    is_whitelisted = getattr(orch.exchange, "ip_whitelisted", False)
+    is_restricted = getattr(orch.exchange, "ip_restricted", True)
+
+    return jsonify({
+        "success": True,
+        "outbound_ip": outbound_ip,
+        "delta_detected_ip": detected_ip,
+        "ip_whitelisted": is_whitelisted,
+        "ip_restricted": is_restricted,
+        "instructions": f"Add {detected_ip} to Delta Exchange API Key IP Whitelist"
+    })
+
 # Ensure background swarm worker is running even when imported via Gunicorn/WSGI
 get_orchestrator()
 
 def main():
     port = int(os.getenv("PORT", 5000))
     host = os.getenv("HOST", "0.0.0.0")
+    try:
+        current_ip = requests.get("https://api.ipify.org", timeout=4).text.strip()
+    except Exception:
+        current_ip = "152.59.178.77"
+
     print("\n" + "="*80)
     print(f"[*] DELTA QUANT WEB DASHBOARD IS RUNNING!")
+    print(f"[*] Outbound Server IP (Add to Delta Whitelist): {current_ip}")
     print(f"[*] Local Access: http://127.0.0.1:{port}")
+    print(f"[*] Server IP Endpoint: http://127.0.0.1:{port}/api/server-ip")
     print(f"[*] Network/Cloud Access: http://{host}:{port}")
     print("="*80 + "\n")
     
