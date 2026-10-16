@@ -245,6 +245,7 @@
           <div id="pos-active-body" style="display: none;">
             <div class="pos-top-row">
               <div class="pos-side-box">
+                <span id="pos-coin" class="badge" style="background: rgba(0, 240, 255, 0.15); color: var(--cyan); border: 1px solid rgba(0, 240, 255, 0.4); font-weight: 800; font-size: 0.82rem; margin-right: 4px; letter-spacing: 0.5px;">BTCUSD</span>
                 <span id="pos-side" class="badge pos-side-badge">BUY</span>
                 <span id="pos-size-text" class="mono pos-size-text">15 Contracts</span>
               </div>
@@ -363,6 +364,7 @@
               <thead>
                 <tr>
                   <th>Time</th>
+                  <th>Coin</th>
                   <th>Side</th>
                   <th>Contracts</th>
                   <th>Exit Price</th>
@@ -372,7 +374,7 @@
               </thead>
               <tbody id="trades-tbody">
                 <tr>
-                  <td colspan="6" class="trades-empty-cell">
+                  <td colspan="7" class="trades-empty-cell">
                     No closed trades yet. Bots are actively hunting setups...
                   </td>
                 </tr>

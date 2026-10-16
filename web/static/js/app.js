@@ -318,6 +318,11 @@ function renderDashboard(data) {
       posBadge.className = "badge badge-live";
     }
 
+    const coinEl = document.getElementById("pos-coin");
+    if (coinEl) {
+      coinEl.innerText = (pos.symbol || state.symbol || "BTCUSD").toUpperCase();
+    }
+
     const sideEl = document.getElementById("pos-side");
     if (sideEl) {
       sideEl.innerText = pos.side || "BUY";
@@ -559,7 +564,7 @@ function renderTradesTable(trades) {
   if (trades.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="6" style="text-align: center; color: var(--text-dim); padding: 15px;">
+        <td colspan="7" style="text-align: center; color: var(--text-dim); padding: 15px;">
           No closed trades recorded yet. Swarm is actively scanning...
         </td>
       </tr>
@@ -570,9 +575,9 @@ function renderTradesTable(trades) {
   tbody.innerHTML = trades.slice().reverse().map(t => {
     const pnl = t.pnl_inr || 0.0;
     const isWin = pnl >= 0;
-    const pnlClass = isWin ? "vote-buy" : "vote-sell";
     const pnlColor = isWin ? "var(--green)" : "var(--red)";
     const sideClass = t.side === "BUY" ? "vote-buy" : "vote-sell";
+    const coinSym = (t.symbol || "XRPUSD").toUpperCase();
     
     // Format timestamp
     let timeStr = "Recent";
@@ -585,12 +590,21 @@ function renderTradesTable(trades) {
       }
     }
 
+    const priceFormatted = (t.exit_price < 2)
+      ? `$${(t.exit_price || 0).toFixed(4)}`
+      : `$${(t.exit_price || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+
     return `
       <tr>
         <td class="mono" style="color: var(--text-dim);">${timeStr}</td>
+        <td>
+          <span class="badge" style="background: rgba(0, 240, 255, 0.12); color: var(--cyan); border: 1px solid rgba(0, 240, 255, 0.35); font-size: 0.72rem; font-weight: 700; padding: 2px 6px;">
+            ${coinSym}
+          </span>
+        </td>
         <td><span class="vote-badge ${sideClass}">${t.side}</span></td>
         <td class="mono">${(t.contracts || 0).toLocaleString()}</td>
-        <td class="mono">$${(t.exit_price || 0).toFixed(4)}</td>
+        <td class="mono">${priceFormatted}</td>
         <td class="mono" style="color: ${pnlColor}; font-weight: 700;">
           ${pnl >= 0 ? '+' : ''}₹${pnl.toFixed(2)}
         </td>
