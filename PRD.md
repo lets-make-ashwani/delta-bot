@@ -144,6 +144,16 @@ The system must run independent strategy modules that continuously analyze multi
 
 ---
 
+### 4.7 Platform Brokerage & Net Profit/Loss Accounting
+- **FR-7.1 (Exchange Fee Modeling)**: Automatically applies Delta Exchange fee schedules (0.05% Taker fee, 0.02% Maker fee) on notional turnover for both entry and exit legs.
+- **FR-7.2 (Delta India GST Accounting)**: Incorporates the mandatory 18% GST applicable to all derivative trading brokerage.
+- **FR-7.3 (Transparent Gross vs. Net Reporting)**: All trade metrics and ledgers explicitly report:
+  - **Gross P&L**: Raw price move gain/loss.
+  - **Platform Brokerage**: Total exchange transaction fees + GST.
+  - **Net Take-Home P&L**: Real cash credited or debited after exchange deductions ($Gross - Brokerage$).
+- **FR-7.4 (Live Position Brokerage Estimator)**: For every active open position, computes estimated round-trip brokerage and live **Net Unrealized P&L** so the trader knows their exact post-fee profit/loss before clicking close.
+- **FR-7.5 (Fee Drag & Net Win Rate)**: Tracks the percentage of profits consumed by exchange fees (Fee Drag %) and computes win rate strictly based on **Net Positive Trades** to avoid high-volume negative-churn scalping.
+
 ## 5. Non-Functional Requirements (NFR)
 
 ### 5.1 Performance & Latency
