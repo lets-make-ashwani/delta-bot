@@ -80,11 +80,12 @@ class PaperTradingEngine:
         if self.position is not None:
             return {"success": False, "error": "Position already open"}
         
-        notional_usd = contracts * entry_price
+        c_val = 0.001 if "BTC" in symbol.upper() else (0.01 if "ETH" in symbol.upper() else (0.1 if "SOL" in symbol.upper() else 1.0))
+        notional_usd = contracts * c_val * entry_price
         notional_inr = notional_usd * self.usd_inr_rate
         margin_inr = notional_inr / self.leverage
         
-        fee_inr = notional_inr * 0.0002  # 0.02% maker fee
+        fee_inr = notional_inr * 0.0005  # 0.05% taker fee
         if margin_inr + fee_inr > self.balance_inr:
             return {"success": False, "error": f"Insufficient margin. Required: INR {margin_inr + fee_inr:.2f}, Balance: INR {self.balance_inr:.2f}"}
 
@@ -101,6 +102,7 @@ class PaperTradingEngine:
             "symbol": symbol,
             "side": side.upper(),
             "contracts": contracts,
+            "contract_value": c_val,
             "entry_price": entry_price,
             "stop_loss": sl_price,
             "take_profit": tp_price,
@@ -109,6 +111,9 @@ class PaperTradingEngine:
             "notional_inr": notional_inr,
             "open_time": time.time(),
             "entry_fee_inr": fee_inr,
+            "gross_unrealized_pnl_inr": 0.0,
+            "est_total_brokerage_inr": fee_inr * 2.36,
+            "net_unrealized_pnl_inr": 0.0,
             "unrealized_pnl_inr": 0.0
         }
         logger.info(f"🟢 [PAPER EXECUTION] {side} {contracts} contracts @ ${entry_price:.4f} | Margin: INR {margin_inr:.2f} | SL: ${sl_price:.4f} | TP: ${tp_price:.4f}")
@@ -132,7 +137,8 @@ class PaperTradingEngine:
             price_change_pct = (entry - current_price) / entry
 
         pnl_inr = notional_inr * price_change_pct
-        b_data = calculate_brokerage_breakdown(self.position["contracts"], 1.0, entry, current_price)
+        c_val = self.position.get("contract_value", 1.0)
+        b_data = calculate_brokerage_breakdown(self.position["contracts"], c_val, entry, current_price)
         est_brokerage_inr = b_data["total_brokerage_inr"]
         est_brokerage_usd = b_data["total_brokerage_usd"]
         
@@ -176,7 +182,8 @@ class PaperTradingEngine:
             pnl_pct = (entry - exit_price) / entry
 
         # Calculate exact round-trip brokerage (Entry + Exit + 18% GST)
-        b_data = calculate_brokerage_breakdown(contracts, 1.0, entry, exit_price, fee_rate=exit_fee_ratio)
+        c_val = pos.get("contract_value", 1.0)
+        b_data = calculate_brokerage_breakdown(contracts, c_val, entry, exit_price, fee_rate=exit_fee_ratio)
         total_brokerage_inr = b_data["total_brokerage_inr"]
         total_brokerage_usd = b_data["total_brokerage_usd"]
         raw_pnl_inr = round(notional_inr * pnl_pct, 2)
