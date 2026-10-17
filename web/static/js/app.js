@@ -266,16 +266,37 @@ function renderDashboard(data) {
     availEl.innerText = `₹${availInr.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
   }
 
-  // Cumulative Realized P&L & Win Rate
-  const totPnl = metrics.total_pnl_inr || 0.0;
+  // Platform Brokerage & Net Realized P&L
+  const totalBrokerage = metrics.total_brokerage_inr || 0.0;
+  const totalBrokerageUsd = metrics.total_brokerage_usd || 0.0;
+  const grossPnl = metrics.gross_pnl_inr !== undefined ? metrics.gross_pnl_inr : (metrics.total_pnl_inr || 0.0);
+  const netPnl = metrics.net_pnl_inr !== undefined ? metrics.net_pnl_inr : (metrics.total_pnl_inr || 0.0);
+
+  const bEl = document.getElementById("kpi-total-brokerage");
+  if (bEl) {
+    bEl.innerText = `₹${totalBrokerage.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+  }
+  const busdEl = document.getElementById("kpi-brokerage-usd");
+  if (busdEl) {
+    busdEl.innerText = `$${totalBrokerageUsd.toFixed(2)}`;
+  }
+
+  const grossEl = document.getElementById("kpi-gross-pnl");
+  if (grossEl) {
+    grossEl.innerText = `Gross: ${grossPnl >= 0 ? '+' : ''}₹${grossPnl.toFixed(2)}`;
+  }
+
   const pnlEl = document.getElementById("kpi-realized-pnl");
   if (pnlEl) {
-    pnlEl.innerText = `${totPnl >= 0 ? '+' : ''}₹${totPnl.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-    pnlEl.style.color = totPnl >= 0 ? "var(--green)" : "var(--red)";
+    pnlEl.innerText = `${netPnl >= 0 ? '+' : ''}₹${netPnl.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    pnlEl.style.color = netPnl >= 0 ? "var(--green)" : "var(--red)";
   }
   const winEl = document.getElementById("kpi-win-rate");
   if (winEl) {
-    winEl.innerText = `${(metrics.win_rate_pct || 0).toFixed(1)}% (${metrics.wins || 0}W / ${metrics.losses || 0}L)`;
+    const wins = metrics.net_wins !== undefined ? metrics.net_wins : (metrics.wins || 0);
+    const losses = metrics.net_losses !== undefined ? metrics.net_losses : (metrics.losses || 0);
+    const winRate = metrics.net_win_rate_pct !== undefined ? metrics.net_win_rate_pct : (metrics.win_rate_pct || 0);
+    winEl.innerText = `${winRate.toFixed(1)}% (${wins}W / ${losses}L)`;
   }
 
   // Market Regime & Profile
@@ -653,6 +674,35 @@ function renderActivePositions(data) {
           <span>Product ID: ${p.product_id || 'N/A'}</span>
         </div>
 
+        <!-- 3-Tier Fair Brokerage & Net PnL Audit Strip -->
+        <div class="pos-fee-audit-row mono">
+          <div class="fee-audit-col">
+            <span class="fee-col-label">Gross Price Move:</span>
+            <span class="fee-col-val" style="color: ${(p.gross_unrealized_pnl_inr || pnlInr) >= 0 ? 'var(--green)' : 'var(--red)'};">
+              ${(p.gross_unrealized_pnl_inr || pnlInr) >= 0 ? '+' : ''}₹${(p.gross_unrealized_pnl_inr || pnlInr).toFixed(2)}
+              <small>(${(p.gross_unrealized_pnl_usd || 0) >= 0 ? '+' : ''}$${(p.gross_unrealized_pnl_usd || 0).toFixed(2)})</small>
+            </span>
+          </div>
+
+          <div class="fee-audit-col">
+            <span class="fee-col-label">Est. Platform Cut (Fees + 18% GST):</span>
+            <span class="fee-col-val" style="color: #ffaa00;">
+              -₹${(p.est_total_brokerage_inr || 0).toFixed(2)}
+              <small>(-$${(p.est_total_brokerage_usd || 0).toFixed(2)})</small>
+            </span>
+          </div>
+
+          <div class="fee-audit-col fee-audit-highlight">
+            <span class="fee-col-label">Net Take-Home If Closed Now:</span>
+            <span class="fee-col-val" style="color: ${(p.net_unrealized_pnl_inr !== undefined ? p.net_unrealized_pnl_inr : pnlInr) >= 0 ? 'var(--green)' : 'var(--red)'}; font-weight: 800;">
+              ${(p.net_unrealized_pnl_inr !== undefined ? p.net_unrealized_pnl_inr : pnlInr) >= 0 ? '+' : ''}₹${(p.net_unrealized_pnl_inr !== undefined ? p.net_unrealized_pnl_inr : pnlInr).toFixed(2)}
+              <span class="badge" style="font-size: 0.70rem; background: rgba(255,255,255,0.08); margin-left: 4px;">
+                ${(p.net_roi_pct !== undefined ? p.net_roi_pct : roi) >= 0 ? '+' : ''}${(p.net_roi_pct !== undefined ? p.net_roi_pct : roi).toFixed(1)}% Net ROI
+              </span>
+            </span>
+          </div>
+        </div>
+
         <div class="pos-adaptive-box">
           <span class="adaptive-icon">⚡</span>
           <div>
@@ -690,9 +740,12 @@ function renderTradesTable(trades) {
   }
 
   tbody.innerHTML = trades.slice().reverse().map(t => {
-    const pnl = t.pnl_inr || 0.0;
-    const isWin = pnl >= 0;
-    const pnlColor = isWin ? "var(--green)" : "var(--red)";
+    const grossPnl = t.gross_pnl_inr !== undefined ? t.gross_pnl_inr : (t.pnl_inr || 0.0);
+    const brokerage = t.brokerage_inr !== undefined ? t.brokerage_inr : 0.0;
+    const netPnl = t.net_pnl_inr !== undefined ? t.net_pnl_inr : (t.pnl_inr || 0.0);
+    const isNetWin = netPnl >= 0;
+    const isGrossWin = grossPnl >= 0;
+    const pnlColor = isNetWin ? "var(--green)" : "var(--red)";
     const sideClass = t.side === "BUY" ? "vote-buy" : "vote-sell";
     const coinSym = (t.symbol || "XRPUSD").toUpperCase();
     
@@ -722,12 +775,18 @@ function renderTradesTable(trades) {
         <td><span class="vote-badge ${sideClass}">${t.side}</span></td>
         <td class="mono">${(t.contracts || 0).toLocaleString()}</td>
         <td class="mono">${priceFormatted}</td>
-        <td class="mono" style="color: ${pnlColor}; font-weight: 700;">
-          ${pnl >= 0 ? '+' : ''}₹${pnl.toFixed(2)}
+        <td class="mono" style="color: ${isGrossWin ? 'var(--green)' : 'var(--red)'}; font-weight: 600;">
+          ${grossPnl >= 0 ? '+' : ''}₹${grossPnl.toFixed(2)}
+        </td>
+        <td class="mono" style="color: #ffaa00; font-weight: 600;">
+          -₹${brokerage.toFixed(2)}
+        </td>
+        <td class="mono" style="color: ${pnlColor}; font-weight: 800;">
+          ${netPnl >= 0 ? '+' : ''}₹${netPnl.toFixed(2)}
         </td>
         <td>
           <span class="badge" style="background: rgba(255,255,255,0.06); font-size: 0.7rem; color: ${pnlColor};">
-            ${t.reason || (isWin ? "PROFIT" : "STOPPED")}
+            ${t.reason || (isNetWin ? "NET PROFIT" : "NET LOSS")}
           </span>
         </td>
       </tr>

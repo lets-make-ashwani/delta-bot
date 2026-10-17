@@ -147,7 +147,7 @@
       </div>
     </section>
 
-    <!-- Account KPI Ribbon -->
+    <!-- Account KPI Ribbon with Real-Time Platform Brokerage & Net PnL -->
     <section class="kpi-grid">
       <div class="glass-card kpi-card">
         <span class="kpi-label">Demo Wallet Balance</span>
@@ -155,10 +155,16 @@
         <span class="kpi-sub">Avail Margin: <span id="kpi-avail-margin" class="mono">₹4,133.32</span></span>
       </div>
 
+      <div class="glass-card kpi-card" id="kpi-card-brokerage">
+        <span class="kpi-label">🏛️ Platform Brokerage &amp; Fees</span>
+        <span class="kpi-value mono" id="kpi-total-brokerage" style="color: #ffaa00;">₹0.00</span>
+        <span class="kpi-sub">Delta Cut: <span id="kpi-brokerage-usd" class="mono">$0.00</span> • <span class="fee-badge">0.05% + 18% GST</span></span>
+      </div>
+
       <div class="glass-card kpi-card">
-        <span class="kpi-label">Cumulative Realized P&L</span>
+        <span class="kpi-label">💰 Net Realized P&amp;L (Post-Cut)</span>
         <span class="kpi-value mono pnl-highlight" id="kpi-realized-pnl">+₹0.00</span>
-        <span class="kpi-sub">Win Rate: <span id="kpi-win-rate" class="mono">0.0% (0W / 0L)</span></span>
+        <span class="kpi-sub"><span id="kpi-gross-pnl" class="mono text-muted">Gross: ₹0.00</span> • Win Rate: <span id="kpi-win-rate" class="mono">0.0%</span></span>
       </div>
 
       <div class="glass-card kpi-card">
@@ -333,13 +339,15 @@
                   <th>Side</th>
                   <th>Contracts</th>
                   <th>Exit Price</th>
-                  <th>Realized P&amp;L</th>
+                  <th>Gross P&amp;L</th>
+                  <th>Brokerage (Fee)</th>
+                  <th>Net P&amp;L (Real)</th>
                   <th>Reason</th>
                 </tr>
               </thead>
               <tbody id="trades-tbody">
                 <tr>
-                  <td colspan="7" class="trades-empty-cell">
+                  <td colspan="9" class="trades-empty-cell">
                     No closed trades yet. Bots are actively hunting setups...
                   </td>
                 </tr>

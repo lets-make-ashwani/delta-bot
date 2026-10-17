@@ -471,8 +471,87 @@ body {
 /* KPI Ribbon */
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 14px;
+}
+
+@media (max-width: 1280px) {
+  .kpi-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .kpi-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Platform Fee & Net PnL Audit Enhancements */
+.fee-badge {
+  background: rgba(255, 170, 0, 0.14);
+  color: #ffaa00;
+  border: 1px solid rgba(255, 170, 0, 0.35);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  display: inline-block;
+}
+
+.pos-fee-audit-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.25fr;
+  gap: 10px;
+  background: rgba(0, 0, 0, 0.38);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 9px 12px;
+  margin-top: 10px;
+}
+
+@media (max-width: 640px) {
+  .pos-fee-audit-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.fee-audit-col {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.fee-col-label {
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.fee-col-val {
+  font-size: 0.90rem;
+  font-weight: 700;
+}
+
+.fee-col-val small {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-dim);
+  margin-left: 3px;
+}
+
+.fee-audit-highlight {
+  background: rgba(0, 240, 255, 0.06);
+  border: 1px solid rgba(0, 240, 255, 0.22);
+  border-radius: 6px;
+  padding: 4px 8px;
 }
 
 .kpi-card {

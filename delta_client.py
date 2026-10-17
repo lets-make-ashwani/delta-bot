@@ -15,6 +15,44 @@ from config import config
 
 logger = logging.getLogger("DeltaClient")
 
+
+# --- Delta Exchange Brokerage & Platform Fee Architecture ---
+DELTA_TAKER_FEE_RATE = 0.0005  # 0.05% Taker Fee per side (Standard Delta Futures)
+DELTA_MAKER_FEE_RATE = 0.0002  # 0.02% Maker Fee per side
+INDIA_GST_RATE = 0.18          # 18% GST on Trading Brokerage / Platform Fees
+
+def calculate_brokerage_breakdown(contracts: int, contract_val: float, entry_price: float, exit_price: float, fee_rate: float = DELTA_TAKER_FEE_RATE, gst_rate: float = INDIA_GST_RATE) -> Dict[str, float]:
+    """Calculates granular exchange fees, 18% GST, and total platform brokerage in USD & INR."""
+    entry_notional_usd = abs(contracts) * contract_val * entry_price
+    exit_notional_usd = abs(contracts) * contract_val * exit_price
+    
+    entry_fee_usd = entry_notional_usd * fee_rate
+    exit_fee_usd = exit_notional_usd * fee_rate
+    subtotal_fees_usd = entry_fee_usd + exit_fee_usd
+    gst_usd = subtotal_fees_usd * gst_rate
+    total_brokerage_usd = subtotal_fees_usd + gst_usd
+    
+    entry_fee_inr = round(entry_fee_usd * config.USD_INR_RATE, 2)
+    exit_fee_inr = round(exit_fee_usd * config.USD_INR_RATE, 2)
+    subtotal_fees_inr = round(subtotal_fees_usd * config.USD_INR_RATE, 2)
+    gst_inr = round(gst_usd * config.USD_INR_RATE, 2)
+    total_brokerage_inr = round(total_brokerage_usd * config.USD_INR_RATE, 2)
+    
+    return {
+        "entry_notional_usd": round(entry_notional_usd, 4),
+        "exit_notional_usd": round(exit_notional_usd, 4),
+        "entry_fee_usd": round(entry_fee_usd, 4),
+        "exit_fee_usd": round(exit_fee_usd, 4),
+        "subtotal_fees_usd": round(subtotal_fees_usd, 4),
+        "gst_usd": round(gst_usd, 4),
+        "total_brokerage_usd": round(total_brokerage_usd, 4),
+        "entry_fee_inr": entry_fee_inr,
+        "exit_fee_inr": exit_fee_inr,
+        "subtotal_fees_inr": subtotal_fees_inr,
+        "gst_inr": gst_inr,
+        "total_brokerage_inr": total_brokerage_inr
+    }
+
 class PaperTradingEngine:
     """Simulates 100x leverage margin trading using live order book and tick data."""
     def __init__(self, initial_capital_inr: float = 0.0, leverage: int = 100, usd_inr_rate: float = 86.5):
@@ -94,8 +132,22 @@ class PaperTradingEngine:
             price_change_pct = (entry - current_price) / entry
 
         pnl_inr = notional_inr * price_change_pct
-        self.position["unrealized_pnl_inr"] = round(pnl_inr, 2)
-        self.position["return_on_equity_pct"] = round((pnl_inr / max(1.0, self.position["margin_inr"])) * 100, 2)
+        b_data = calculate_brokerage_breakdown(self.position["contracts"], 1.0, entry, current_price)
+        est_brokerage_inr = b_data["total_brokerage_inr"]
+        est_brokerage_usd = b_data["total_brokerage_usd"]
+        
+        gross_pnl_inr = round(pnl_inr, 2)
+        net_pnl_inr = round(pnl_inr - est_brokerage_inr, 2)
+        
+        self.position["gross_unrealized_pnl_inr"] = gross_pnl_inr
+        self.position["gross_unrealized_pnl_usd"] = round(gross_pnl_inr / self.usd_inr_rate, 2)
+        self.position["est_total_brokerage_inr"] = est_brokerage_inr
+        self.position["est_total_brokerage_usd"] = est_brokerage_usd
+        self.position["net_unrealized_pnl_inr"] = net_pnl_inr
+        self.position["net_unrealized_pnl_usd"] = round(net_pnl_inr / self.usd_inr_rate, 2)
+        self.position["unrealized_pnl_inr"] = net_pnl_inr
+        self.position["return_on_equity_pct"] = round((net_pnl_inr / max(1.0, self.position["margin_inr"])) * 100, 2)
+        self.position["roi_pct"] = self.position["return_on_equity_pct"]
 
         # 1. Check Liquidation
         if (side == "BUY" and current_price <= liq) or (side == "SELL" and current_price >= liq):
@@ -111,39 +163,57 @@ class PaperTradingEngine:
 
         return None
 
-    def _close_position(self, exit_price: float, reason: str, exit_fee_ratio: float = 0.0002) -> Dict[str, Any]:
+    def _close_position(self, exit_price: float, reason: str, exit_fee_ratio: float = 0.0005) -> Dict[str, Any]:
         pos = self.position
         side = pos["side"]
         entry = pos["entry_price"]
         notional_inr = pos["notional_inr"]
+        contracts = pos["contracts"]
 
         if side == "BUY":
             pnl_pct = (exit_price - entry) / entry
         else:
             pnl_pct = (entry - exit_price) / entry
 
-        exit_fee_inr = notional_inr * exit_fee_ratio
-        raw_pnl_inr = notional_inr * pnl_pct
+        # Calculate exact round-trip brokerage (Entry + Exit + 18% GST)
+        b_data = calculate_brokerage_breakdown(contracts, 1.0, entry, exit_price, fee_rate=exit_fee_ratio)
+        total_brokerage_inr = b_data["total_brokerage_inr"]
+        total_brokerage_usd = b_data["total_brokerage_usd"]
+        raw_pnl_inr = round(notional_inr * pnl_pct, 2)
+        raw_pnl_usd = round(raw_pnl_inr / self.usd_inr_rate, 2)
         
         if reason == "LIQUIDATION":
             net_pnl_inr = -pos["margin_inr"]
+            net_pnl_usd = round(net_pnl_inr / self.usd_inr_rate, 2)
             self.liquidations += 1
         else:
-            net_pnl_inr = raw_pnl_inr - exit_fee_inr
+            net_pnl_inr = round(raw_pnl_inr - total_brokerage_inr, 2)
+            net_pnl_usd = round(raw_pnl_usd - total_brokerage_usd, 2)
 
         self.balance_inr = max(0.0, self.balance_inr + net_pnl_inr)
 
         trade_result = {
             "symbol": pos["symbol"],
             "side": side,
-            "contracts": pos["contracts"],
+            "contracts": contracts,
             "entry_price": entry,
             "exit_price": exit_price,
             "reason": reason,
-            "pnl_inr": round(net_pnl_inr, 2),
+            "gross_pnl_inr": raw_pnl_inr,
+            "gross_pnl_usd": raw_pnl_usd,
+            "entry_fee_inr": b_data["entry_fee_inr"],
+            "exit_fee_inr": b_data["exit_fee_inr"],
+            "gst_inr": b_data["gst_inr"],
+            "brokerage_inr": total_brokerage_inr,
+            "brokerage_usd": total_brokerage_usd,
+            "net_pnl_inr": net_pnl_inr,
+            "net_pnl_usd": net_pnl_usd,
+            "pnl_inr": net_pnl_inr,
+            "pnl_usd": net_pnl_usd,
             "pnl_pct_on_margin": round((net_pnl_inr / pos["margin_inr"]) * 100, 2),
             "new_balance_inr": round(self.balance_inr, 2),
-            "duration_sec": round(time.time() - pos["open_time"], 1)
+            "duration_sec": round(time.time() - pos["open_time"], 1),
+            "is_net_win": net_pnl_inr > 0
         }
         self.trades.append(trade_result)
         self.position = None
@@ -420,16 +490,34 @@ class DeltaExchangeManager:
                         )
                     )
                     margin_cost = max(1.0, (contracts * c_val * price / config.LEVERAGE))
+                    b_data = calculate_brokerage_breakdown(contracts, c_val, price, price)
+                    trade_brokerage_usd = b_data["total_brokerage_usd"]
+                    trade_brokerage_inr = b_data["total_brokerage_inr"]
+                    gross_pnl_usd = round(pnl_usd, 2)
+                    gross_pnl_inr = round(pnl_usd * config.USD_INR_RATE, 2)
+                    net_pnl_usd = round(gross_pnl_usd - trade_brokerage_usd, 2)
+                    net_pnl_inr = round(gross_pnl_inr - trade_brokerage_inr, 2)
+
                     parsed_trades.append({
                         "id": fill_id,
                         "symbol": trade_sym,
                         "side": side,
                         "contracts": contracts,
                         "exit_price": price,
-                        "pnl_usd": round(pnl_usd, 2),
-                        "pnl_inr": pnl_inr,
-                        "pnl_pct_on_margin": round((pnl_usd / margin_cost) * 100, 2),
-                        "reason": "TAKE_PROFIT" if pnl_usd > 0 else "STOP_LOSS",
+                        "gross_pnl_usd": gross_pnl_usd,
+                        "gross_pnl_inr": gross_pnl_inr,
+                        "brokerage_usd": trade_brokerage_usd,
+                        "brokerage_inr": trade_brokerage_inr,
+                        "entry_fee_inr": b_data["entry_fee_inr"],
+                        "exit_fee_inr": b_data["exit_fee_inr"],
+                        "gst_inr": b_data["gst_inr"],
+                        "net_pnl_usd": net_pnl_usd,
+                        "net_pnl_inr": net_pnl_inr,
+                        "pnl_usd": net_pnl_usd,
+                        "pnl_inr": net_pnl_inr,
+                        "pnl_pct_on_margin": round((net_pnl_usd / margin_cost) * 100, 2),
+                        "reason": "TAKE_PROFIT" if net_pnl_inr > 0 else "STOP_LOSS",
+                        "is_net_win": net_pnl_inr > 0,
                         "timestamp": f.get("created_at", "")
                     })
             if parsed_trades:
@@ -520,6 +608,16 @@ class DeltaExchangeManager:
                     dist_tp_pct = round(abs(tp_price - mark) / mark * 100, 2) if mark > 0 else 0.0
                     dist_liq_pct = round(abs(mark - liq) / mark * 100, 2) if mark > 0 and liq > 0 else 0.0
 
+                    b_data = calculate_brokerage_breakdown(abs(raw_size), c_val, entry, mark)
+                    gross_pnl_usd = round(live_pnl_usd, 2)
+                    gross_pnl_inr = round(live_pnl_usd * config.USD_INR_RATE, 2)
+                    est_brokerage_usd = b_data["total_brokerage_usd"]
+                    est_brokerage_inr = b_data["total_brokerage_inr"]
+                    net_pnl_usd = round(gross_pnl_usd - est_brokerage_usd, 2)
+                    net_pnl_inr = round(gross_pnl_inr - est_brokerage_inr, 2)
+                    gross_roi_pct = round((gross_pnl_inr / max(1.0, margin_inr)) * 100, 2)
+                    net_roi_pct = round((net_pnl_inr / max(1.0, margin_inr)) * 100, 2)
+
                     pos_dict = {
                         "symbol": pos_sym,
                         "product_id": pos_pid,
@@ -536,8 +634,20 @@ class DeltaExchangeManager:
                         "margin_inr": margin_inr,
                         "notional_usd": notional_usd,
                         "notional_inr": notional_inr,
-                        "unrealized_pnl_usd": round(live_pnl_usd, 2),
-                        "unrealized_pnl_inr": live_pnl_inr,
+                        "gross_unrealized_pnl_usd": gross_pnl_usd,
+                        "gross_unrealized_pnl_inr": gross_pnl_inr,
+                        "gross_roi_pct": gross_roi_pct,
+                        "est_entry_fee_usd": b_data["entry_fee_usd"],
+                        "est_exit_fee_usd": b_data["exit_fee_usd"],
+                        "est_gst_usd": b_data["gst_usd"],
+                        "est_total_brokerage_usd": est_brokerage_usd,
+                        "est_total_brokerage_inr": est_brokerage_inr,
+                        "net_unrealized_pnl_usd": net_pnl_usd,
+                        "net_unrealized_pnl_inr": net_pnl_inr,
+                        "net_roi_pct": net_roi_pct,
+                        "unrealized_pnl_usd": net_pnl_usd,
+                        "unrealized_pnl_inr": net_pnl_inr,
+                        "roi_pct": net_roi_pct,
                         "roi_pct": roi_pct,
                         "dist_sl_pct": dist_sl_pct,
                         "dist_tp_pct": dist_tp_pct,
@@ -686,22 +796,45 @@ class DeltaExchangeManager:
             return {"success": False, "error": str(e)}
 
     def get_trade_metrics(self) -> Dict[str, Any]:
-        """Calculates cumulative PnL, win rate, and total closed trade performance."""
+        """Calculates cumulative PnL, platform brokerage, win rate, and total closed trade performance."""
         trades = self.paper.trades if self.mode == "paper" else self.trade_history
-        total_pnl_inr = sum(t.get("pnl_inr", 0.0) for t in trades)
-        wins = [t for t in trades if t.get("pnl_inr", 0.0) > 0]
-        losses = [t for t in trades if t.get("pnl_inr", 0.0) < 0]
+        total_gross_pnl_inr = sum(t.get("gross_pnl_inr", t.get("pnl_inr", 0.0)) for t in trades)
+        total_brokerage_inr = sum(t.get("brokerage_inr", 0.0) for t in trades)
+        total_net_pnl_inr = sum(t.get("net_pnl_inr", t.get("pnl_inr", 0.0)) for t in trades)
+        total_brokerage_usd = round(total_brokerage_inr / config.USD_INR_RATE, 2)
+        total_gross_pnl_usd = round(total_gross_pnl_inr / config.USD_INR_RATE, 2)
+        total_net_pnl_usd = round(total_net_pnl_inr / config.USD_INR_RATE, 2)
+
+        gross_wins = [t for t in trades if t.get("gross_pnl_inr", t.get("pnl_inr", 0.0)) > 0]
+        net_wins = [t for t in trades if t.get("net_pnl_inr", t.get("pnl_inr", 0.0)) > 0]
+        net_losses = [t for t in trades if t.get("net_pnl_inr", t.get("pnl_inr", 0.0)) <= 0]
         total_count = len(trades)
-        win_rate = round((len(wins) / total_count * 100), 1) if total_count > 0 else 0.0
+        net_win_rate = round((len(net_wins) / total_count * 100), 1) if total_count > 0 else 0.0
+        gross_win_rate = round((len(gross_wins) / total_count * 100), 1) if total_count > 0 else 0.0
+
+        fee_drag_pct = round((total_brokerage_inr / max(0.01, total_gross_pnl_inr)) * 100, 1) if total_gross_pnl_inr > 0 else 0.0
 
         return {
             "trades": trades,
             "total_trades": total_count,
-            "wins": len(wins),
-            "losses": len(losses),
-            "win_rate_pct": win_rate,
-            "total_pnl_inr": round(total_pnl_inr, 2),
-            "total_realized_pnl_inr": round(total_pnl_inr, 2)
+            "gross_wins": len(gross_wins),
+            "net_wins": len(net_wins),
+            "wins": len(net_wins),
+            "losses": len(net_losses),
+            "net_losses": len(net_losses),
+            "gross_win_rate_pct": gross_win_rate,
+            "win_rate_pct": net_win_rate,
+            "net_win_rate_pct": net_win_rate,
+            "gross_pnl_inr": round(total_gross_pnl_inr, 2),
+            "gross_pnl_usd": total_gross_pnl_usd,
+            "total_brokerage_inr": round(total_brokerage_inr, 2),
+            "total_brokerage_usd": total_brokerage_usd,
+            "net_pnl_inr": round(total_net_pnl_inr, 2),
+            "net_pnl_usd": total_net_pnl_usd,
+            "total_pnl_inr": round(total_net_pnl_inr, 2),
+            "total_realized_pnl_inr": round(total_net_pnl_inr, 2),
+            "fee_drag_pct": fee_drag_pct,
+            "brokerage_fee_rate": "0.05% Taker + 18% GST"
         }
 
     def place_scalp_order(self, side: str, contracts: int, entry_price: float, sl_price: float, tp_price: float) -> Dict[str, Any]:

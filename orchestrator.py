@@ -386,20 +386,32 @@ class SwarmOrchestrator:
             }
 
         total_margin_inr = round(sum(p.get("margin_inr", 0.0) for p in active_positions), 2)
-        total_pnl_inr = round(sum(p.get("unrealized_pnl_inr", 0.0) for p in active_positions), 2)
-        total_pnl_usd = round(sum(p.get("unrealized_pnl_usd", 0.0) for p in active_positions), 2)
+        total_gross_pnl_inr = round(sum(p.get("gross_unrealized_pnl_inr", p.get("unrealized_pnl_inr", 0.0)) for p in active_positions), 2)
+        total_gross_pnl_usd = round(sum(p.get("gross_unrealized_pnl_usd", p.get("unrealized_pnl_usd", 0.0)) for p in active_positions), 2)
+        total_est_brokerage_inr = round(sum(p.get("est_total_brokerage_inr", 0.0) for p in active_positions), 2)
+        total_est_brokerage_usd = round(sum(p.get("est_total_brokerage_usd", 0.0) for p in active_positions), 2)
+        total_net_pnl_inr = round(sum(p.get("net_unrealized_pnl_inr", p.get("unrealized_pnl_inr", 0.0)) for p in active_positions), 2)
+        total_net_pnl_usd = round(sum(p.get("net_unrealized_pnl_usd", p.get("unrealized_pnl_usd", 0.0)) for p in active_positions), 2)
         total_notional_inr = round(sum(p.get("notional_inr", 0.0) for p in active_positions), 2)
         total_notional_usd = round(sum(p.get("notional_usd", 0.0) for p in active_positions), 2)
-        combined_roi_pct = round((total_pnl_inr / max(1.0, total_margin_inr)) * 100, 2) if active_positions else 0.0
+        combined_net_roi_pct = round((total_net_pnl_inr / max(1.0, total_margin_inr)) * 100, 2) if active_positions else 0.0
+        combined_gross_roi_pct = round((total_gross_pnl_inr / max(1.0, total_margin_inr)) * 100, 2) if active_positions else 0.0
 
         positions_summary = {
             "total_open": len(active_positions),
             "total_margin_inr": total_margin_inr,
             "total_notional_usd": total_notional_usd,
             "total_notional_inr": total_notional_inr,
-            "total_unrealized_pnl_inr": total_pnl_inr,
-            "total_unrealized_pnl_usd": total_pnl_usd,
-            "total_roi_pct": combined_roi_pct
+            "total_gross_unrealized_pnl_inr": total_gross_pnl_inr,
+            "total_gross_unrealized_pnl_usd": total_gross_pnl_usd,
+            "total_est_brokerage_inr": total_est_brokerage_inr,
+            "total_est_brokerage_usd": total_est_brokerage_usd,
+            "total_net_unrealized_pnl_inr": total_net_pnl_inr,
+            "total_net_unrealized_pnl_usd": total_net_pnl_usd,
+            "total_unrealized_pnl_inr": total_net_pnl_inr,
+            "total_unrealized_pnl_usd": total_net_pnl_usd,
+            "total_roi_pct": combined_net_roi_pct,
+            "total_gross_roi_pct": combined_gross_roi_pct
         }
 
         result_payload = {
